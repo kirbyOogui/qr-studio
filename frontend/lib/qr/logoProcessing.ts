@@ -8,6 +8,7 @@
 
 import type { FontKey } from "@/types/qr";
 import { FONT_STACKS } from "./fonts";
+import { TEXT_LOGO_MIN_HEIGHT_RATIO } from "./logoConstraints";
 
 export type LogoShape = "square" | "circle";
 
@@ -86,22 +87,34 @@ export interface TextLogoOptions {
   fillColor: string;
   textColor: string;
   shape: LogoShape;
+  /**
+   * 幅に対する高さの比率(TEXT_LOGO_MIN_HEIGHT_RATIO〜1)。
+   * 1未満にすると縦が狭い横長のロゴになる。circle形状では常に1として扱う
+   * (楕円にはしない)。
+   */
+  heightRatio: number;
 }
 
 // 文字数に関わらず一定の解像度で描く(ベクター的なテキスト描画のため、
 // 画像ロゴのように元解像度を気にする必要が無い)。
-const TEXT_LOGO_SIZE = 512;
+const TEXT_LOGO_WIDTH = 512;
+const TEXT_LOGO_MIN_FONT_SIZE = 14;
+const TEXT_LOGO_LINE_HEIGHT_RATIO = 1.2;
 
 /**
- * 短いテキストを、塗りつぶした四角/丸の背景の上に中央揃えで描いたPNG data URLを返す。
- * フォントサイズは指定幅に収まるまでcanvasの実測(measureText)で段階的に縮小するため、
- * 何文字入れても背景からはみ出さない。
+ * 短い(複数行可の)テキストを、塗りつぶした四角/丸の背景の上に中央揃えで
+ * 描いたPNG data URLを返す。フォントサイズは指定の幅・高さの両方に収まる
+ * 最大値までcanvasの実測(measureText)で段階的に縮小して求めるため、
+ * 行数や1行の長さが変わっても背景からはみ出さず、かつ可能な限り大きく描かれる。
  */
-export function renderTextLogo({ text, fontKey, fillColor, textColor, shape }: TextLogoOptions): string {
-  const size = TEXT_LOGO_SIZE;
+export function renderTextLogo({ text, fontKey, fillColor, textColor, shape, heightRatio }: TextLogoOptions): string {
+  const width = TEXT_LOGO_WIDTH;
+  const height =
+    shape === "circle" ? width : Math.round(width * Math.min(1, Math.max(TEXT_LOGO_MIN_HEIGHT_RATIO, heightRatio)));
+
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     throw new Error("この環境では画像処理に対応していません。");
@@ -110,31 +123,42 @@ export function renderTextLogo({ text, fontKey, fillColor, textColor, shape }: T
   ctx.fillStyle = fillColor;
   if (shape === "circle") {
     ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    ctx.arc(width / 2, height / 2, width / 2, 0, Math.PI * 2);
     ctx.fill();
   } else {
-    ctx.fillRect(0, 0, size, size);
+    ctx.fillRect(0, 0, width, height);
   }
 
-  const trimmed = text.trim();
-  if (trimmed) {
-    // 円形は角の分だけ実効的に使える幅が狭くなるため、内接する正方形相当に絞る。
-    const usableWidth = shape === "circle" ? size * 0.62 : size * 0.8;
-    const maxFontSize = size * 0.5;
-    const minFontSize = size * 0.12;
+  const lines = text.split("\n").map((line) => line.trim());
+  if (lines.some((line) => line.length > 0)) {
+    // 円形は角の分だけ実効的に使える幅・高さが狭くなるため、内接する正方形相当に絞る。
+    const usableWidth = shape === "circle" ? width * 0.62 : width * 0.85;
+    const usableHeight = shape === "circle" ? height * 0.62 : height * 0.82;
     const fontFamily = FONT_STACKS[fontKey];
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    let fontSize = maxFontSize;
-    while (fontSize > minFontSize) {
+
+    // 上限は「収まる範囲で最大限大きく」を実測ベースの縮小ループに任せるため、
+    // キャンバスサイズそのものから開始する(恣意的な上限比率を設けない)。
+    let fontSize = Math.max(width, height);
+    while (fontSize > TEXT_LOGO_MIN_FONT_SIZE) {
       ctx.font = `700 ${fontSize}px ${fontFamily}`;
-      if (ctx.measureText(trimmed).width <= usableWidth) break;
+      const lineHeight = fontSize * TEXT_LOGO_LINE_HEIGHT_RATIO;
+      const totalTextHeight = lineHeight * lines.length;
+      const widestLine = Math.max(...lines.map((line) => ctx.measureText(line || " ").width));
+      if (widestLine <= usableWidth && totalTextHeight <= usableHeight) break;
       fontSize -= 2;
     }
+
     ctx.font = `700 ${fontSize}px ${fontFamily}`;
     ctx.fillStyle = textColor;
-    ctx.fillText(trimmed, size / 2, size / 2);
+    const lineHeight = fontSize * TEXT_LOGO_LINE_HEIGHT_RATIO;
+    const totalTextHeight = lineHeight * lines.length;
+    const firstLineY = height / 2 - totalTextHeight / 2 + lineHeight / 2;
+    lines.forEach((line, index) => {
+      ctx.fillText(line, width / 2, firstLineY + index * lineHeight);
+    });
   }
 
   return canvas.toDataURL("image/png");

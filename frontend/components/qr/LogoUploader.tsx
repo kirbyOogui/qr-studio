@@ -9,7 +9,12 @@ import { useDragAndDropFile } from "@/hooks/useDragAndDropFile";
 import { sniffImageType, MAX_LOGO_FILE_BYTES } from "@/lib/security/fileValidation";
 import { sanitizeSvg } from "@/lib/security/svgSanitize";
 import { processLogoImage, renderTextLogo, type CropRect } from "@/lib/qr/logoProcessing";
-import { MAX_LOGO_RATIO_BY_EC, LOGO_SIZE_MIN_RATIO, LOGO_ERROR_CORRECTION } from "@/lib/qr/logoConstraints";
+import {
+  MAX_LOGO_RATIO_BY_EC,
+  LOGO_SIZE_MIN_RATIO,
+  LOGO_ERROR_CORRECTION,
+  TEXT_LOGO_DEFAULT_HEIGHT_RATIO,
+} from "@/lib/qr/logoConstraints";
 import { SAFE_BACKGROUNDS, SAFE_COLORS } from "@/lib/qr/safeColors";
 import type { ErrorCorrectionLevel, LogoConfig, LogoShape } from "@/types/qr";
 
@@ -28,6 +33,7 @@ const DEFAULT_TEXT_DRAFT: TextLogoDraft = {
   fillColor: SAFE_BACKGROUNDS[0]!.color,
   textColor: SAFE_COLORS[0]!.color,
   shape: DEFAULT_SHAPE,
+  heightRatio: TEXT_LOGO_DEFAULT_HEIGHT_RATIO,
 };
 
 interface PendingUpload {
@@ -40,7 +46,14 @@ interface PendingUpload {
 // ここから再生成する(logo.dataUrlは既に加工・描画済みのため再利用できない)。
 type LogoSource =
   | { type: "image"; sourceDataUrl: string; crop: CropRect }
-  | { type: "text"; text: string; fontKey: TextLogoDraft["fontKey"]; fillColor: string; textColor: string };
+  | {
+      type: "text";
+      text: string;
+      fontKey: TextLogoDraft["fontKey"];
+      fillColor: string;
+      textColor: string;
+      heightRatio: number;
+    };
 
 async function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -126,6 +139,7 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
         fontKey: draft.fontKey,
         fillColor: draft.fillColor,
         textColor: draft.textColor,
+        heightRatio: draft.heightRatio,
       });
       onChange({
         dataUrl,
@@ -153,6 +167,7 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
             fillColor: logoSource.fillColor,
             textColor: logoSource.textColor,
             shape: logo?.shape ?? DEFAULT_SHAPE,
+            heightRatio: logoSource.heightRatio,
           }
         : DEFAULT_TEXT_DRAFT,
     );
@@ -167,6 +182,7 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
         fillColor: logoSource.fillColor,
         textColor: logoSource.textColor,
         shape: logo.shape,
+        heightRatio: logoSource.heightRatio,
       });
       return;
     }
@@ -188,6 +204,7 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
           fontKey: logoSource.fontKey,
           fillColor: logoSource.fillColor,
           textColor: logoSource.textColor,
+          heightRatio: logoSource.heightRatio,
           shape,
         });
         onChange({ ...logo, dataUrl, shape });
@@ -236,83 +253,83 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
   return (
     <div>
       {logo ? (
-        <div className="flex items-start gap-4">
-          <div className="relative h-16 w-16 shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={logo.dataUrl}
-              alt={`アップロードされたロゴ: ${logo.fileName}`}
-              className={`h-16 w-16 border border-black/10 object-contain p-1 ${
-                logo.shape === "circle" ? "rounded-full" : "rounded-xl"
-              }`}
-            />
-            {isProcessing && (
-              <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/70">
-                <Spinner className="h-5 w-5 text-accent" />
-              </div>
-            )}
-          </div>
-          <div className="flex-1 space-y-3">
-            <div>
-              <span className="mb-2 block text-sm font-medium text-ink/80">切り抜き形状</span>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={() => void handleShapeChange("square")}
-                  aria-pressed={logo.shape === "square"}
-                  className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
-                    logo.shape === "square"
-                      ? "border-accent bg-accent/10 text-accent"
-                      : "border-black/10 text-ink/60 hover:border-black/20"
-                  }`}
-                >
-                  四角
-                </button>
-                <button
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={() => void handleShapeChange("circle")}
-                  aria-pressed={logo.shape === "circle"}
-                  className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
-                    logo.shape === "circle"
-                      ? "border-accent bg-accent/10 text-accent"
-                      : "border-black/10 text-ink/60 hover:border-black/20"
-                  }`}
-                >
-                  丸
-                </button>
-                <button
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={handleEdit}
-                  className="rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium text-ink/60 hover:border-black/20 disabled:opacity-50"
-                >
-                  {logoSource?.type === "text" ? "テキストを編集" : "トリミングを編集"}
-                </button>
-              </div>
+        <div className="space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="relative h-16 w-16 shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logo.dataUrl}
+                alt={`アップロードされたロゴ: ${logo.fileName}`}
+                className={`h-16 w-16 border border-black/10 object-contain p-1 ${
+                  logo.shape === "circle" ? "rounded-full" : "rounded-xl"
+                }`}
+              />
+              {isProcessing && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/70">
+                  <Spinner className="h-5 w-5 text-accent" />
+                </div>
+              )}
             </div>
-            <Slider
-              id="logo-size"
-              label="ロゴサイズ"
-              min={LOGO_SIZE_MIN_RATIO}
-              max={maxSizeRatio}
-              step={0.01}
-              value={Math.min(logo.sizeRatio, maxSizeRatio)}
-              onChange={(sizeRatio) => onChange({ ...logo, sizeRatio })}
-              formatValue={(v) => `${Math.round(v * 100)}%`}
-            />
+            <button
+              type="button"
+              onClick={() => {
+                setLogoSource(null);
+                onChange(null);
+              }}
+              className="ml-auto min-h-11 shrink-0 rounded-lg px-3 text-sm font-medium text-red-500 hover:bg-red-50"
+            >
+              削除
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setLogoSource(null);
-              onChange(null);
-            }}
-            className="text-sm font-medium text-red-500 hover:underline"
-          >
-            削除
-          </button>
+          <div>
+            <span className="mb-2 block text-sm font-medium text-ink/80">切り抜き形状</span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={() => void handleShapeChange("square")}
+                aria-pressed={logo.shape === "square"}
+                className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+                  logo.shape === "square"
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-black/10 text-ink/60 hover:border-black/20"
+                }`}
+              >
+                四角
+              </button>
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={() => void handleShapeChange("circle")}
+                aria-pressed={logo.shape === "circle"}
+                className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+                  logo.shape === "circle"
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-black/10 text-ink/60 hover:border-black/20"
+                }`}
+              >
+                丸
+              </button>
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={handleEdit}
+                className="min-h-11 rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium text-ink/60 hover:border-black/20 disabled:opacity-50"
+              >
+                {logoSource?.type === "text" ? "テキストを編集" : "トリミングを編集"}
+              </button>
+            </div>
+          </div>
+          <Slider
+            id="logo-size"
+            label="ロゴサイズ"
+            min={LOGO_SIZE_MIN_RATIO}
+            max={maxSizeRatio}
+            step={0.01}
+            value={Math.min(logo.sizeRatio, maxSizeRatio)}
+            onChange={(sizeRatio) => onChange({ ...logo, sizeRatio })}
+            formatValue={(v) => `${Math.round(v * 100)}%`}
+          />
         </div>
       ) : (
         <div>

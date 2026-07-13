@@ -2,10 +2,11 @@
 
 import { useId, useMemo, useState } from "react";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { Slider } from "@/components/ui/Slider";
 import { SwatchPicker } from "@/components/ui/SwatchPicker";
 import { FONT_OPTIONS } from "@/lib/qr/fonts";
 import { renderTextLogo } from "@/lib/qr/logoProcessing";
-import { MAX_TEXT_LOGO_LENGTH } from "@/lib/qr/logoConstraints";
+import { MAX_TEXT_LOGO_LENGTH, TEXT_LOGO_MIN_HEIGHT_RATIO } from "@/lib/qr/logoConstraints";
 import { SAFE_BACKGROUNDS, SAFE_COLORS } from "@/lib/qr/safeColors";
 import type { FontKey, LogoShape } from "@/types/qr";
 
@@ -15,6 +16,8 @@ export interface TextLogoDraft {
   fillColor: string;
   textColor: string;
   shape: LogoShape;
+  /** 幅に対する高さの比率(TEXT_LOGO_MIN_HEIGHT_RATIO〜1)。丸形状では常に1として扱う。 */
+  heightRatio: number;
 }
 
 interface LogoTextComposerProps {
@@ -54,17 +57,17 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
           <label htmlFor={inputId} className="mb-2 block text-sm font-medium text-ink/80">
             ロゴのテキスト
           </label>
-          <input
+          <textarea
             id={inputId}
-            type="text"
             value={draft.text}
             maxLength={MAX_TEXT_LOGO_LENGTH}
             onChange={(event) => setDraft((prev) => ({ ...prev, text: event.target.value }))}
-            placeholder="例: SALE"
-            className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm outline-none focus:border-accent"
+            placeholder={"例: SALE\n(Enterで改行できます)"}
+            rows={2}
+            className="w-full resize-none rounded-xl border border-black/10 px-3 py-2 text-sm outline-none focus:border-accent"
           />
           <p className="mt-1 text-xs text-ink/40">
-            {draft.text.length}/{MAX_TEXT_LOGO_LENGTH}文字・幅に収まるようフォントサイズを自動調整します
+            {draft.text.length}/{MAX_TEXT_LOGO_LENGTH}文字・Enterで改行・幅と高さに収まる最大サイズで自動調整します
           </p>
         </div>
       </div>
@@ -76,7 +79,7 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
             type="button"
             onClick={() => setDraft((prev) => ({ ...prev, shape: "square" }))}
             aria-pressed={draft.shape === "square"}
-            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
               draft.shape === "square"
                 ? "border-accent bg-accent/10 text-accent"
                 : "border-black/10 text-ink/60 hover:border-black/20"
@@ -88,7 +91,7 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
             type="button"
             onClick={() => setDraft((prev) => ({ ...prev, shape: "circle" }))}
             aria-pressed={draft.shape === "circle"}
-            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
               draft.shape === "circle"
                 ? "border-accent bg-accent/10 text-accent"
                 : "border-black/10 text-ink/60 hover:border-black/20"
@@ -98,6 +101,19 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
           </button>
         </div>
       </div>
+
+      {draft.shape === "square" && (
+        <Slider
+          id="text-logo-height"
+          label="縦の高さ"
+          min={TEXT_LOGO_MIN_HEIGHT_RATIO}
+          max={1}
+          step={0.05}
+          value={draft.heightRatio}
+          onChange={(heightRatio) => setDraft((prev) => ({ ...prev, heightRatio }))}
+          formatValue={(v) => `${Math.round(v * 100)}%`}
+        />
+      )}
 
       <div>
         <p className="mb-2 text-sm font-medium text-ink/80">フォント</p>
@@ -141,7 +157,7 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg border border-black/10 px-4 py-1.5 text-sm font-medium text-ink/60 hover:border-black/20"
+          className="min-h-11 rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium text-ink/60 hover:border-black/20"
         >
           キャンセル
         </button>
@@ -149,7 +165,7 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
           type="button"
           disabled={!trimmed}
           onClick={() => onConfirm({ ...draft, text: trimmed })}
-          className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          className="min-h-11 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
         >
           適用
         </button>
