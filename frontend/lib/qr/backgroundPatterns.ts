@@ -61,11 +61,32 @@ function catFace(cx: number, cy: number, featureOpacity: number): string {
     </g>`;
 }
 
-// 符頭(丸)+軸(縦棒)だけの左右対称な音符を1つ描く(旗は左右非対称になるため付けない)。
-function musicNote(cx: number, cy: number): string {
-  const r = 4.4;
-  const stem = 15;
-  return `<circle cx="${cx}" cy="${cy}" r="${r}"/><rect x="${cx - 1.2}" y="${cy - stem}" width="2.4" height="${(stem + r * 0.3).toFixed(2)}" rx="1.2"/>`;
+// 符頭2つを上部の梁(はり)でつなぐ「連桁音符(♫)」を1つ描く。旗の代わりに
+// 左右対称な梁でつなぐことで、単独の音符では避けられない左右非対称
+// (旗は片側にしか付かない)を回避しつつ、実際の音符らしい見た目を保つ。
+function beamedNotes(cx: number, cy: number): string {
+  const spacing = 11;
+  const r = 3.6;
+  const stem = 14;
+  const n1x = cx - spacing / 2;
+  const n2x = cx + spacing / 2;
+  const topY = cy - stem;
+  return `
+    <circle cx="${n1x}" cy="${cy}" r="${r}"/>
+    <circle cx="${n2x}" cy="${cy}" r="${r}"/>
+    <rect x="${n1x - 1.1}" y="${topY}" width="2.2" height="${stem}"/>
+    <rect x="${n2x - 1.1}" y="${topY}" width="2.2" height="${stem}"/>
+    <rect x="${n1x - 1.1}" y="${topY}" width="${spacing + 2.2}" height="2.6"/>`;
+}
+
+// 中央十字(D-pad)状の左右対称・上下対称なゲームパッドアイコンを1つ描く。
+function dpad(cx: number, cy: number, s = 6.5): string {
+  return `
+    <rect x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}"/>
+    <rect x="${cx - s / 2}" y="${cy - s / 2 - s}" width="${s}" height="${s}"/>
+    <rect x="${cx - s / 2}" y="${cy - s / 2 + s}" width="${s}" height="${s}"/>
+    <rect x="${cx - s / 2 - s}" y="${cy - s / 2}" width="${s}" height="${s}"/>
+    <rect x="${cx - s / 2 + s}" y="${cy - s / 2}" width="${s}" height="${s}"/>`;
 }
 
 export const PATTERNS: PatternDef[] = [
@@ -111,7 +132,7 @@ export const PATTERNS: PatternDef[] = [
           <circle cx="46" cy="42" r="8"/>
         </g>
         <g fill="none" stroke="#8B7FE8" stroke-opacity="${o}" stroke-width="2.4">
-          <ellipse cx="46" cy="42" rx="15" ry="5" transform="rotate(-20 46 42)"/>
+          <ellipse cx="46" cy="42" rx="15" ry="5"/>
         </g>`,
     }),
   },
@@ -136,14 +157,11 @@ export const PATTERNS: PatternDef[] = [
     label: "ゲーム",
     swatchColor: "#6D28D9",
     tile: (o) => ({
-      size: 40,
+      size: 48,
       content: `
         <g fill="#6D28D9" fill-opacity="${o}">
-          <rect x="4" y="4" width="8" height="8"/>
-          <rect x="20" y="4" width="8" height="8"/>
-          <rect x="12" y="12" width="8" height="8"/>
-          <rect x="28" y="20" width="8" height="8"/>
-          <rect x="4" y="28" width="8" height="8"/>
+          ${dpad(14, 14)}
+          ${dpad(36, 36)}
         </g>`,
     }),
   },
@@ -195,9 +213,11 @@ export const PATTERNS: PatternDef[] = [
       content: `
         <g stroke="#FB923C" stroke-opacity="${o}" stroke-width="2" stroke-linecap="round">
           <path d="M20 4 L20 36 M4 20 L36 20 M9 9 L31 31 M31 9 L9 31"/>
-          <circle cx="60" cy="56" r="3" fill="#FB923C" fill-opacity="${o}" stroke="none"/>
-          <circle cx="70" cy="46" r="2" fill="#FB923C" fill-opacity="${o}" stroke="none"/>
-          <circle cx="50" cy="66" r="2" fill="#FB923C" fill-opacity="${o}" stroke="none"/>
+        </g>
+        <g fill="#FB923C" fill-opacity="${o}">
+          <circle cx="58" cy="46" r="2.6"/>
+          <circle cx="52" cy="60" r="2"/>
+          <circle cx="64" cy="60" r="2"/>
         </g>`,
     }),
   },
@@ -222,8 +242,8 @@ export const PATTERNS: PatternDef[] = [
       size: 64,
       content: `
         <g fill="#22D3EE" fill-opacity="${o}">
-          ${musicNote(18, 42)}
-          ${musicNote(50, 18)}
+          ${beamedNotes(20, 46)}
+          ${beamedNotes(48, 18)}
         </g>`,
     }),
   },
