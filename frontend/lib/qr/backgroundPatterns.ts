@@ -61,32 +61,43 @@ function catFace(cx: number, cy: number, featureOpacity: number): string {
     </g>`;
 }
 
-// 符頭2つを上部の梁(はり)でつなぐ「連桁音符(♫)」を1つ描く。旗の代わりに
-// 左右対称な梁でつなぐことで、単独の音符では避けられない左右非対称
-// (旗は片側にしか付かない)を回避しつつ、実際の音符らしい見た目を保つ。
-function beamedNotes(cx: number, cy: number): string {
-  const spacing = 11;
-  const r = 3.6;
-  const stem = 14;
-  const n1x = cx - spacing / 2;
-  const n2x = cx + spacing / 2;
-  const topY = cy - stem;
+// 符頭(楕円)+軸+旗を持つ、実際の八分音符(♪)らしい見た目の音符を1つ描く。
+// 音符という記号自体は旗が片側にしか付かない本質的に非対称な形だが、
+// タイル内での「配置」はミラー配置にすることで左右対称にする(形は非対称のままでよい)。
+function musicNote(cx: number, cy: number): string {
+  const r = 4.2;
+  const stemH = 16;
+  const stemX = cx + r * 0.82;
+  const topY = cy - stemH;
   return `
-    <circle cx="${n1x}" cy="${cy}" r="${r}"/>
-    <circle cx="${n2x}" cy="${cy}" r="${r}"/>
-    <rect x="${n1x - 1.1}" y="${topY}" width="2.2" height="${stem}"/>
-    <rect x="${n2x - 1.1}" y="${topY}" width="2.2" height="${stem}"/>
-    <rect x="${n1x - 1.1}" y="${topY}" width="${spacing + 2.2}" height="2.6"/>`;
+    <ellipse cx="${cx}" cy="${cy}" rx="${r}" ry="${(r * 0.72).toFixed(2)}" transform="rotate(-18 ${cx} ${cy})"/>
+    <rect x="${(stemX - 0.9).toFixed(2)}" y="${topY}" width="1.8" height="${stemH + 1}"/>
+    <path d="M${(stemX + 0.9).toFixed(2)} ${topY} q6.5 2.2 5.2 8.6 q-3.2 -2.8 -5.2 -1.6 Z"/>`;
 }
 
-// 中央十字(D-pad)状の左右対称・上下対称なゲームパッドアイコンを1つ描く。
-function dpad(cx: number, cy: number, s = 6.5): string {
+// ゲームコントローラーのシルエット(丸みを帯びた本体+左にD-pad+右に丸ボタン2つ)を1つ描く。
+function gameController(cx: number, cy: number): string {
+  const bodyW = 26;
+  const bodyH = 14;
+  const left = cx - bodyW / 2;
+  const top = cy - bodyH / 2;
+  const dpadCx = left + 7;
+  const s = 3;
+  const btn1x = left + bodyW - 9;
+  const btn1y = cy - 3;
+  const btn2x = left + bodyW - 5;
+  const btn2y = cy + 2;
   return `
-    <rect x="${cx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}"/>
-    <rect x="${cx - s / 2}" y="${cy - s / 2 - s}" width="${s}" height="${s}"/>
-    <rect x="${cx - s / 2}" y="${cy - s / 2 + s}" width="${s}" height="${s}"/>
-    <rect x="${cx - s / 2 - s}" y="${cy - s / 2}" width="${s}" height="${s}"/>
-    <rect x="${cx - s / 2 + s}" y="${cy - s / 2}" width="${s}" height="${s}"/>`;
+    <rect x="${left}" y="${top}" width="${bodyW}" height="${bodyH}" rx="6"/>
+    <g fill="#fff">
+      <rect x="${dpadCx - s / 2}" y="${cy - s / 2}" width="${s}" height="${s}"/>
+      <rect x="${dpadCx - s / 2}" y="${cy - s / 2 - s}" width="${s}" height="${s}"/>
+      <rect x="${dpadCx - s / 2}" y="${cy - s / 2 + s}" width="${s}" height="${s}"/>
+      <rect x="${dpadCx - s / 2 - s}" y="${cy - s / 2}" width="${s}" height="${s}"/>
+      <rect x="${dpadCx - s / 2 + s}" y="${cy - s / 2}" width="${s}" height="${s}"/>
+      <circle cx="${btn1x}" cy="${btn1y}" r="1.6"/>
+      <circle cx="${btn2x}" cy="${btn2y}" r="1.6"/>
+    </g>`;
 }
 
 export const PATTERNS: PatternDef[] = [
@@ -94,12 +105,15 @@ export const PATTERNS: PatternDef[] = [
     key: "sakura",
     label: "桜",
     swatchColor: "#F472B6",
+    // タイル中心線(x=36)を挟んで各段が左右対(同じy・鏡写しのx)になるよう配置。
     tile: (o) => ({
       size: 72,
       content: `
         <g fill="#F472B6" fill-opacity="${o}">
-          ${sakuraFlower(20, 20)}
-          ${sakuraFlower(52, 50)}
+          ${sakuraFlower(20, 18)}
+          ${sakuraFlower(52, 18)}
+          ${sakuraFlower(20, 54)}
+          ${sakuraFlower(52, 54)}
         </g>`,
     }),
   },
@@ -121,18 +135,19 @@ export const PATTERNS: PatternDef[] = [
     key: "space",
     label: "宇宙",
     swatchColor: "#8B7FE8",
+    // 惑星をタイル中心線(x=40)の真上に置き、星はその中心線を挟んだ鏡写しのペアで配置。
     tile: (o) => ({
       size: 80,
       content: `
         <g fill="#8B7FE8" fill-opacity="${o}">
-          <circle cx="12" cy="14" r="2.4"/>
-          <circle cx="26" cy="60" r="1.8"/>
-          <circle cx="66" cy="14" r="1.6"/>
-          <circle cx="10" cy="70" r="1.6"/>
-          <circle cx="46" cy="42" r="8"/>
+          <circle cx="14" cy="12" r="2.2"/>
+          <circle cx="66" cy="12" r="2.2"/>
+          <circle cx="18" cy="68" r="1.7"/>
+          <circle cx="62" cy="68" r="1.7"/>
+          <circle cx="40" cy="40" r="8"/>
         </g>
         <g fill="none" stroke="#8B7FE8" stroke-opacity="${o}" stroke-width="2.4">
-          <ellipse cx="46" cy="42" rx="15" ry="5"/>
+          <ellipse cx="40" cy="40" rx="15" ry="5" transform="rotate(-20 40 40)"/>
         </g>`,
     }),
   },
@@ -140,14 +155,15 @@ export const PATTERNS: PatternDef[] = [
     key: "cat",
     label: "猫",
     swatchColor: "#C2703D",
+    // タイル中心線(x=36)を挟んで同じ高さに配置。
     tile: (o) => {
       const featureOpacity = Math.min(o * 3, 0.9);
       return {
         size: 72,
         content: `
           <g fill="#C2703D" fill-opacity="${o}" stroke="#C2703D" stroke-opacity="${o}">
-            ${catFace(20, 26, featureOpacity)}
-            ${catFace(54, 54, featureOpacity)}
+            ${catFace(20, 30, featureOpacity)}
+            ${catFace(52, 30, featureOpacity)}
           </g>`,
       };
     },
@@ -156,12 +172,13 @@ export const PATTERNS: PatternDef[] = [
     key: "game",
     label: "ゲーム",
     swatchColor: "#6D28D9",
+    // タイル中心線(x=32)を挟んで同じ高さに配置。
     tile: (o) => ({
-      size: 48,
+      size: 64,
       content: `
         <g fill="#6D28D9" fill-opacity="${o}">
-          ${dpad(14, 14)}
-          ${dpad(36, 36)}
+          ${gameController(16, 20)}
+          ${gameController(48, 20)}
         </g>`,
     }),
   },
@@ -182,12 +199,13 @@ export const PATTERNS: PatternDef[] = [
     key: "snow",
     label: "雪",
     swatchColor: "#60A5FA",
+    // タイル中心線(x=30)を挟んで同じ高さに配置。
     tile: (o) => ({
       size: 60,
       content: `
         <g stroke="#60A5FA" stroke-opacity="${o}" stroke-width="2" stroke-linecap="round">
           <path d="M20 6 L20 26 M11 11 L29 21 M29 11 L11 21"/>
-          <path d="M48 32 L48 52 M39 37 L57 47 M57 37 L39 47"/>
+          <path d="M40 6 L40 26 M31 11 L49 21 M49 11 L31 21"/>
         </g>`,
     }),
   },
@@ -195,12 +213,13 @@ export const PATTERNS: PatternDef[] = [
     key: "autumn",
     label: "紅葉",
     swatchColor: "#D97706",
+    // タイル中心線(x=34)を挟んで同じ高さに配置。
     tile: (o) => ({
       size: 68,
       content: `
         <g fill="#D97706" fill-opacity="${o}">
           <path d="M20 8 L24 18 L34 16 L26 24 L32 32 L20 28 L8 32 L14 24 L6 16 L16 18 Z"/>
-          <path d="M50 34 L54 44 L64 42 L56 50 L62 58 L50 54 L38 58 L44 50 L36 42 L46 44 Z"/>
+          <path d="M48 8 L52 18 L62 16 L54 24 L60 32 L48 28 L36 32 L42 24 L34 16 L44 18 Z"/>
         </g>`,
     }),
   },
@@ -208,16 +227,19 @@ export const PATTERNS: PatternDef[] = [
     key: "fireworks",
     label: "花火",
     swatchColor: "#FB923C",
+    // 大きな打ち上げ花火をタイル中心線(x=42)の真上に置き、飛び散る火花は
+    // その中心線を挟んだ鏡写しのペアで配置。
     tile: (o) => ({
       size: 84,
       content: `
         <g stroke="#FB923C" stroke-opacity="${o}" stroke-width="2" stroke-linecap="round">
-          <path d="M20 4 L20 36 M4 20 L36 20 M9 9 L31 31 M31 9 L9 31"/>
+          <path d="M42 4 L42 36 M26 20 L58 20 M31 9 L53 31 M53 9 L31 31"/>
         </g>
         <g fill="#FB923C" fill-opacity="${o}">
-          <circle cx="58" cy="46" r="2.6"/>
-          <circle cx="52" cy="60" r="2"/>
-          <circle cx="64" cy="60" r="2"/>
+          <circle cx="12" cy="58" r="2.4"/>
+          <circle cx="72" cy="58" r="2.4"/>
+          <circle cx="18" cy="64" r="1.8"/>
+          <circle cx="66" cy="64" r="1.8"/>
         </g>`,
     }),
   },
@@ -225,12 +247,13 @@ export const PATTERNS: PatternDef[] = [
     key: "heart",
     label: "ハート",
     swatchColor: "#FB7185",
+    // タイル中心線(x=28)を挟んで同じ高さ・同じ大きさで配置。
     tile: (o) => ({
       size: 56,
       content: `
         <g fill="#FB7185" fill-opacity="${o}">
           <path d="M16 12c-3-4-9-2-9 3 0 5 9 11 9 11s9-6 9-11c0-5-6-7-9-3z"/>
-          <path d="M44 32c-2.4-3.2-7.2-1.6-7.2 2.4 0 4 7.2 8.8 7.2 8.8s7.2-4.8 7.2-8.8c0-4-4.8-5.6-7.2-2.4z"/>
+          <path d="M40 12c-3-4-9-2-9 3 0 5 9 11 9 11s9-6 9-11c0-5-6-7-9-3z"/>
         </g>`,
     }),
   },
@@ -238,12 +261,13 @@ export const PATTERNS: PatternDef[] = [
     key: "music",
     label: "音符",
     swatchColor: "#22D3EE",
+    // タイル中心線(x=32)を挟んで同じ高さに配置(音符の向き自体は非対称のままでよい)。
     tile: (o) => ({
       size: 64,
       content: `
         <g fill="#22D3EE" fill-opacity="${o}">
-          ${beamedNotes(20, 46)}
-          ${beamedNotes(48, 18)}
+          ${musicNote(18, 40)}
+          ${musicNote(46, 40)}
         </g>`,
     }),
   },
@@ -251,14 +275,15 @@ export const PATTERNS: PatternDef[] = [
     key: "forest",
     label: "森",
     swatchColor: "#15803D",
+    // タイル中心線(x=34)を挟んで同じ高さに配置。
     tile: (o) => ({
       size: 68,
       content: `
         <g fill="#15803D" fill-opacity="${o}">
           <path d="M18 6 L28 22 L23 22 L30 34 L6 34 L13 22 L8 22 Z"/>
           <rect x="16" y="34" width="4" height="8"/>
-          <path d="M48 20 L56 32 L52 32 L58 42 L38 42 L44 32 L40 32 Z"/>
-          <rect x="46" y="42" width="4" height="7"/>
+          <path d="M50 6 L60 22 L55 22 L62 34 L38 34 L45 22 L40 22 Z"/>
+          <rect x="48" y="34" width="4" height="8"/>
         </g>`,
     }),
   },
