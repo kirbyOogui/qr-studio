@@ -11,7 +11,9 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
-  `connect-src 'self' ${apiOrigin}`,
+  // qr-code-stylingはロゴ画像(data URL)をfetch()で読み込むため、data:を許可しないと
+  // CSPでブロックされ、画像読み込みが完了せずQR生成処理がフリーズする(実機で確認)。
+  `connect-src 'self' ${apiOrigin} data:`,
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "object-src 'none'",

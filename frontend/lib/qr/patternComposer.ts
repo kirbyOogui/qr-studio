@@ -11,7 +11,7 @@ export interface ComposedSvgResult {
 
 // 柄の見た目を大きくするための拡大率。タイル寸法・内容ともに同じ倍率で
 // 拡大するため、線の太さ含めた比率は変わらない(単に繰り返し回数が減るだけ)。
-const PATTERN_SCALE = 2;
+const PATTERN_SCALE = 3;
 
 function buildPatternFill(pattern: PatternKey, intensity: PatternIntensity): FrameBackgroundFill | null {
   if (pattern === "none") return null;
