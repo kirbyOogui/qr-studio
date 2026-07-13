@@ -24,6 +24,14 @@ export async function checkQuality(
     });
 
     if (!response.ok) {
+      if (response.status >= 400 && response.status < 500) {
+        // 4xxはネットワーク到達不能ではなく、リクエスト自体が拒否されている
+        // (フロントとバックエンドのスキーマ制約がずれている等、実装側の不具合の
+        // 可能性が高い)。UIへは安全側にフォールバックしつつ、原因調査できるよう
+        // devtoolsのコンソールには詳細を残す。
+        const body = await response.text().catch(() => "");
+        console.error(`quality-check request was rejected (${response.status}): ${body}`);
+      }
       throw new QualityApiUnreachableError(`quality-check failed with status ${response.status}`);
     }
 

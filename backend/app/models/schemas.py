@@ -50,7 +50,10 @@ class QrDesignParams(BaseModel):
 
     error_correction: ErrorCorrectionLevel = ErrorCorrectionLevel.M
     quiet_zone_modules: int = Field(default=4, ge=0, le=20)
-    logo_ratio: float | None = Field(default=None, ge=0.0, le=0.4)
+    # ge/leはリクエストレベルの大まかな健全性チェックに過ぎず、EC levelごとの
+    # 実際の安全上限はquality_engine._MAX_LOGO_RATIOが個別に判定・補正する。
+    # ここの上限はその最大値(H=0.45)を下回らないよう、余裕を持たせて設定すること。
+    logo_ratio: float | None = Field(default=None, ge=0.0, le=0.5)
     size_px: int = Field(default=512, ge=64, le=4096)
     corner_square_style: CornerSquareStyle = CornerSquareStyle.SQUARE
     dot_style: DotStyle = DotStyle.SQUARE
