@@ -1,0 +1,517 @@
+====================================================================
+QR Studio 開発記録
+====================================================================
+
+【2026-07-11】プロジェクト開始
+
+■ 受領したプロンプト概要
+- サービス名: QR Studio（「考えなくても、最高品質のQRコード。」）
+- Frontend: Next.js(App Router) + React + TypeScript + Tailwind CSS + PWA、Vercel Freeにデプロイ
+- Backend: Python FastAPI、Google Cloud Run（min-instances=0）にデプロイ
+- Backend の役割は「APIサーバー」ではなく「QR Quality Engine（品質保証エンジン）」
+- 完全Stateless設計（URL・画像・ログを一切保存しない）
+- セキュリティ（CSP/HSTS等ヘッダー、入力検証、SVGサニタイズ、レート制限）
+- QR生成・デザイン編集・ロゴ追加・出力サイズプリセット・自動品質補正・PWA・パフォーマンス最適化・テスト・デプロイまで一貫実装
+
+■ 採用アーキテクチャ（設計理由は README.md / docs/architecture.md に記載）
+- QRコードのレンダリングはクライアントサイド（qr-code-styling）でリアルタイムに実施し、
+  ネットワーク往復なしで即座にプレビューできるようにする。
+- FastAPI側は「品質診断＋自動補正パラメータの算出」のみを担当。
+  画像はBase64でリクエストボディに載せて渡し、処理後は一切保存せずメモリ上で破棄する。
+- 3種類のデコードエンジン（OpenCV QRCodeDetector / pyzbar(zbar) / zxing-cpp）で
+  クロス検証し、全てのデコーダーで読み取れることを保証する。
+- 品質診断結果はユーザーに見せず、内部の自動補正ループ（フロントのカスタムフック）が
+  補正後パラメータで再生成→再検証を収束するまで自動で繰り返す。
+
+■ 作業ログ（随時追記）
+- [作業開始] ディレクトリ構成を frontend/ backend/ docs/ に分割して作成。
+
+【2026-07-11】バックエンド(FastAPI品質保証エンジン)実装
+- app/core: config.py(設定) / logging.py(URL・画像を含まない安全なアクセスログ) /
+  security.py(セキュリティヘッダー・ボディサイズ制限) / rate_limit.py(slowapi)
+- app/services: decode_engines.py(OpenCV/pyzbar/zxing-cpp の3エンジン統一IF) /
+  quality_engine.py(デコード検証・コントラスト・Quiet Zone・ロゴ比率・サイズ解析) /
+  correction_engine.py(補正後パラメータの計算)
+- app/api/v1/endpoints: health.py / quality.py
+- テスト10件作成、pytest全通過。ruff lintも通過。
+- 発生した不具合と修正:
+  1) SecurityHeadersMiddlewareで`response.headers.pop()`を使用しAttributeError発生
+     → MutableHeadersには`pop`が無いため`del`に変更して解決。
+  2) コントラスト推定で中央値ベースの二値化を採用していたが、QRは背景(白)の面積比率が
+     圧倒的に大きいため二値分離に失敗しコントラスト比が常に1.0になるバグを検出。
+     → Otsu法(cv2.threshold + THRESH_OTSU)による二値化に変更して解決。
+  3) zxing-cpp==2.2.0はPython3.13向けのプリビルドwheelが無くcmakeビルドが必要だったため、
+     プリビルドwheelが存在する3.1.0に変更。
+
+【2026-07-11】フロントエンド(Next.js)実装
+- Next.js 16.2.10 / React 19.2.7 (当初next@15.1.4を指定していたがCVE-2025-66478の脆弱性警告が
+  出たため最新安定版に変更)。Tailwind CSS 3。
+- QR生成: qr-code-styling(クライアント側リアルタイム描画) + qrcode-generator(モジュール数計算、
+  バックエンドと同じQR規格アルゴリズムでQuiet Zoneの実ピクセル値を算出)
+- 品質保証ループ: hooks/useQualityAssurance.ts が useEffect の依存配列(design変更)を
+  トリガーに /api/v1/qr/quality-check を呼び出し、補正が返れば design state を更新して
+  自然に再ループする設計。
+- セキュリティ: lib/validation/url.ts(スキーム制限) / lib/security/fileValidation.ts
+  (マジックナンバーによるMIMEスニッフィング) / lib/security/svgSanitize.ts(DOMPurify)
+- PWA: public/manifest.webmanifest, public/sw.js(静的アセットのみキャッシュ、
+  /api/への通信は常にネットワークから取得しキャッシュしない)。アイコンはsharpが
+  この環境でネイティブモジュールのセグフォルトを起こしたため、依存ライブラリ無しの
+  自前PNGエンコーダ(scripts/pngEncoder.mjs)で生成する方式に変更。
+- テスト: Vitest 22件作成、全通過。
+
+■ 重大な環境問題の調査と原因特定(重要・今後の参考用)
+症状: `npm install`実行時、esbuild/unrs-resolver/core-js等のpostinstallスクリプトが
+ことごとく `STATUS_ACCESS_VIOLATION`(0xC0000005)でクラッシュ。さらに`--ignore-scripts`で
+インストール後、`node -e "require('react')"` や `tsc --version`、`next --version`など、
+node_modules配下のパッケージをrequireする操作が軒並み同じ理由でクラッシュした。
+一方、`console.log(1+1)`のようなrequireを伴わない処理や、Pythonのpytest/ruffは
+同じプロジェクトディレクトリ内で問題なく動作した。
+
+切り分けの結果、原因はプロジェクトパスに含まれる日本語フォルダ名
+("AIエンジニア"、"QR自動作成ツール")であると判明。同じnode_modulesを
+英数字のみのパス(例: %TEMP%\qr-frontend-build)にコピーして実行すると、
+`npm install`(postinstallスクリプト含む)・`tsc`・`eslint`・`next build`・`vitest`
+全てが正常に動作した。Windowsジャンクション(シンボリックリンク)経由でも
+実体パスが日本語のままだと再現したため、シンボリックリンクでの回避は不可。
+
+結論: これはNode.js(v22.12.0)がこのWindows環境で非ASCIIパスをnode_modulesの
+require解決時に正しく扱えない、環境固有の問題であり、コードの不具合ではない。
+Vercel等のLinuxビルド環境や、英数字パスでのローカル開発では発生しない。
+本セッションでは英数字の一時ディレクトリにコピーしてビルド・テスト・lintを
+実施し、修正が必要だった実際のコード上の問題(下記)は本体のプロジェクトに反映した。
+
+■ 上記の検証中に見つかった実コードの修正
+- app/page.tsx: `next/dynamic`の`ssr:false`はServer Componentで使用不可(Turbopackが拒否)
+  だったため、QrStudioは素直に直接importする形に変更(QrStudio自体が"use client"のため問題なし)。
+- hooks/useQualityAssurance.ts: `react-hooks/set-state-in-effect`ルールにより、
+  「propsから導出できる状態をeffect内で直接setStateする」パターンが指摘された。
+  isUrlProvidedがfalseの場合の"idle"はレンダー時に導出する形に変更し、
+  最大試行回数到達時の分岐もasync callback内に移動して解決。
+- hooks/useQrStylingInstance.ts: getRawDataの返り値型(Blob | Buffer)の型不整合を修正。
+- lib/security/fileValidation.ts: jsdomテスト環境でBlob#arrayBuffer/textが未実装だったため、
+  FileReaderベースの読み取りに変更(実ブラウザでもより広く互換性のある実装になった)。
+- eslint設定をESLint9のflat config形式(eslint.config.mjs)に全面移行
+  (eslint-config-next 16はexports経由でflat config配列を直接提供している)。
+
+■ 最終検証結果(1回目)
+- Backend: pytest 10/10 pass, ruff clean
+- Frontend: tsc --noEmit エラー0件, eslint エラー0件, vitest 22/22 pass,
+  `next build`本番ビルド成功, 本番サーバーでのHTTPレスポンス・セキュリティヘッダーを確認済み
+- 実ブラウザでのインタラクティブ操作(手動クリック等)は本環境にブラウザツールが無いため未実施
+
+【2026-07-11】実ブラウザ(Playwright)での動作確認と、そこで発見した3件の実バグ修正
+ユーザーから「実際にnpm run devを動かして画面を見せて」と依頼されたため、chromium-cliが
+本環境に無かったのでPlaywright(chromium)をASCIIパスの作業コピーに導入し、
+バックエンド(実フォルダの.venvから直接起動、Pythonは日本語パスでも問題なし)と
+フロントエンド(ASCIIコピー上でnpm run dev相当)を実際に起動し、ヘッドレスブラウザで
+URL入力→QR生成→デザイン変更→ダウンロードボタン活性化までを操作して検証した。
+この過程で以下の3件の実際の不具合を発見し、本体のソースに修正を反映した:
+
+1. next.config.mjsのCSPが本番用の厳格な設定のまま開発時にも適用されており、
+   `script-src`に`unsafe-eval`が無いため、Reactの開発モードが内部で使うeval()が
+   CSP違反でブロックされ、開発サーバーが常にエラー画面(eval() is not supported)に
+   なっていた。
+   → 修正: `NODE_ENV !== "production"`の時のみ`'unsafe-eval'`を追加するよう変更。
+
+2. lib/qr/qrStylingClient.tsで、ロゴが無い場合に`imageOptions: undefined`を
+   明示的にオプションオブジェクトのキーとして渡していたため、qr-code-styling内部の
+   デフォルト値マージ処理が壊れ、`Cannot read properties of undefined (reading
+   'hideBackgroundDots')`で初回描画時に必ずクラッシュしていた。
+   → 修正: ロゴが無い場合は`image`/`imageOptions`キー自体を省略する(スプレッド構文で
+   条件付加)よう変更。
+
+3. hooks/useQualityAssurance.tsで、品質チェックのeffectのトリガーに「非デバウンスの
+   isUrlProvided」と「デバウンス済みのdesign(expected_payloadの実データ)」という
+   異なる基準の値を混在させていたため、URL入力直後の一瞬だけ
+   `isUrlProvided=true`だが`debouncedDesign.url`はまだ空文字、という状態で
+   バックエンドへ`expected_payload: ""`のリクエストを送ってしまい、
+   Pydanticのmin_length=1バリデーションで422になる競合状態(race condition)が
+   実際に発生することを確認した(ブラウザのconsoleエラーとバックエンドのアクセスログで
+   確認)。
+   → 修正: effectのガード条件を`debouncedDesign.url`から導出した
+   `debouncedUrlProvided`に統一し、基準のずれを解消。
+
+■ 修正後の最終確認
+- 上記3件を修正後、Playwrightでの一連の操作でconsoleエラー0件、バックエンドの
+  quality-checkは200(補正不要)で完了、ダウンロードボタンが活性化することを確認。
+  ドット形状を「ラウンド」→「クラシック」に変更した際、QRコードの見た目が
+  実際に切り替わることも拡大スクリーンショットで確認済み。
+- 検証に使ったPlaywright・作業用コピーはセッション終了時に削除し、本体には残していない
+  (package.jsonにplaywrightは追加していない。デモ専用の一時的な導入)。
+
+【2026-07-11】ユーザーがローカルで実際に触った上でのフィードバック対応
+ユーザー自身がローカルでnpm run devを動かして操作した結果、以下3点の指摘を受けた。
+
+1. 「グラデーションをオフにしてもグラデーションがついたままになっている」
+   → 実際に再現・原因調査した。qr-code-stylingの`update()`は内部で差分マージしか
+   行わないため、新しいdotsOptionsに`gradient`キーが存在しない(グラデーションOFF時)
+   場合、以前設定した古いgradientの値が消えずに残ってしまう既知の挙動だった。
+   ロゴを外す場合の`image`/`imageOptions`にも同種の問題が起こり得ると判断し、
+   hooks/useQrStylingInstance.ts を「update()で差分反映」から
+   「design変更のたびにコンテナをクリアしてインスタンスを作り直す」方式に変更して解決。
+   Playwrightで on→offを実機検証し、offにした際に単色に戻ることを確認済み。
+
+2. 「縦に長く、見づらいので見やすいようにして」
+   → デザイン編集・ロゴ追加・出力サイズの3つの独立したカードが縦に積み上がっていたのが
+   原因。components/ui/Tabs.tsx を新規作成し、この3つを1枚のカード内のタブ
+   (デザイン/ロゴ/サイズ)に統合。ダウンロードカードのみ独立して常時表示のまま残した。
+   これによりページの縦の長さが大幅に短縮され、QRプレビューとほぼ同じ高さに収まることを
+   スクリーンショットで確認。
+
+3. 「もっとレパートリーが欲しい。ポップとか。」
+   → lib/qr/stylePresets.ts と components/qr/StylePresets.tsx を新規作成し、
+   「ミニマル・ポップ・オーシャン・ビジネス・ナチュラル・ダーク」の6種類の
+   スタイルプリセット(色・グラデーション・ドット形状・四隅デザインの組み合わせ)を
+   ワンクリックで適用できるようにした。デザインタブの先頭に配置。
+   hooks/useQrDesign.ts に applyStylePreset を追加。
+
+修正後、tsc/eslint/vitest(22件)/next buildを再実行し全て通過を確認。
+Playwrightでの実機検証(グラデーションOFF反映、ポップ適用、タブ切り替え)も
+console エラー0件で完了。
+
+【2026-07-11】「ダーク」の差し色調整 と「全面テーマ」機能の追加、および
+実装中に発見した4件の重大な補正ロジック不備
+
+ユーザーから「ダークの差し色が強い」との指摘、および「QR全体がテーマの世界観になる
+機能(桜・海・宇宙・猫・ゲーム・和柄など)が欲しい」との要望を受けた。ChatGPTとの
+相談を踏まえ、ユーザーは「大胆な見た目(リスクあり)」を選択したが、その後
+「安全と分かっているパターンだけを選べるようにしては」という提案があり、
+連続スライダーではなく事前検証済みの3段階(濃い→標準→控えめ)+テーマオフの
+「はしご」方式を採用することにした。
+
+■ 実装
+- lib/qr/themes.ts: 6テーマ(桜/海/宇宙/猫/ゲーム/和柄)の背景パターン(SVG)と
+  QR配色を定義。
+- lib/qr/themeComposer.ts: QR画像(透明背景でエクスポート、無加工)をテーマ柄の
+  上に重ねて合成するSVGを生成。QRの暗いモジュールは一切変更しない。
+- qrStylingClient.ts: テーマ使用時はQRの背景を透明にして書き出すよう変更。
+- useQrDesign.ts: applyTheme(大胆=intensity2を既定に設定)、
+  applyThemeIntensityStepDown(2→1→0→テーマオフの4段階はしご、
+  最終手段では配色も黒/白にリセット)を追加。
+- useQualityAssurance.ts: 全面テーマ使用時は合成後の最終画像を検証し、
+  デコード失敗時はまずテーマの濃さを1段階下げてから他の補正を試すよう変更。
+  MAX_ITERATIONSを5→10に増やし、複数の補正軸(テーマ段階・EC・Quiet Zone・
+  四隅形状・コントラスト)を組み合わせても収束しやすくした。
+
+■ 実機検証(ダウンロード→3エンジンデコード)で発見した4件の重大な不備
+1. コントラスト判定が「アンチエイリアシング」に弱かった
+   通常サイズ(640px)の実際のブラウザ描画QR(丸みのあるドット)で、縁の
+   アンチエイリアシングピクセルが「最悪ケース評価」に混入し、黒/白の
+   理想的なQRですら不合格判定になっていた。dark cluster/light clusterの
+   min/maxではなくパーセンタイル(上下5%を切り捨て)に変更して解決。
+2. コントラスト不足の補正が実質何もしていなかった
+   correction_engine.build_correctionsは contrast_ok=False でも
+   size_px等を一切変更しておらず、同じ補正を延々返し続ける実質無限ループに
+   なっていた。「モジュールが小さい+丸形状→アンチエイリアシングでコントラスト
+   低下」が根本原因と判明したため、contrast_ok=Falseの際にsize_pxを1.5倍に
+   増やす補正を追加。
+3. サイズが上限(4096px)に達してもなお解決しない場合の対策が無かった
+   極端に長いURL(モジュール数57)ではサイズ拡大だけでは解決しないケースがあり、
+   QrDesignParamsに`dot_style`(square/other)を追加し、サイズが上限に達した
+   場合の最終手段としてドット形状をsquareへフォールバックする補正を追加。
+4. フロントの補正適用ロジックが「コントラスト補正」と「構造的補正」を
+   排他的に扱っていた(片方適用したら即returnして、同じラウンドでもう片方を
+   適用しない)ため、両方に問題がある場合に収束が遅れていた。両方を同じ
+   ラウンドでまとめて適用するよう修正。
+
+■ 検証方法と結果
+Playwrightで実際に全6テーマ・全6スタイルプリセット・全3フレームテンプレートを
+ダウンロードし、OpenCV / pyzbar / zxing-cpp の3エンジン全てで正しくデコードできる
+ことを個別に確認(通常のURL長で全パターンOK)。さらに意図的に長いURL
+(モジュール数57)でのストレステストも実施し、はしご式の自動補正が
+最終的に安全な状態(テーマオフ・黒/白配色)へ確実に収束することを確認した
+(収束には最大10ラウンド・数秒かかる場合があるが、ダウンロードボタンは
+収束するまでdisabled状態を保つため、実際のユーザーが未収束の状態を
+ダウンロードしてしまうことはない)。
+
+backend: pytest 13/13 pass(回帰防止テスト3件追加)、ruff clean
+frontend: tsc/eslint/vitest(22件)/next build 全てpass継続
+
+【2026-07-11】「テーマ」を「背景」として色と分離する大幅リデザイン
+
+ユーザーから以下のフィードバックを受けた:
+1. フレーム適用で背景パターンが消える
+2. テーマ選択が何度もリセットされ、1回で切り替わらない
+3. テーマ設定後に色を変えて良いか不安
+4. 「テーマ」ではなく「背景」として設定し、QRの色は読み取りやすい範囲だけ選べるようにしては
+5. 背景パターンの種類を増やしたい
+6. 読み取りやすさを最優先に
+
+ユーザー提案(4)を採用し、以下のように再設計した。
+
+■ 設計変更
+- 「テーマ」概念を廃止し「背景」に置き換え。背景パターンはQRの色(foregroundColor/
+  gradient/cornerAccentColor)に一切影響しない、純粋な装飾のみになった
+  (lib/qr/backgroundPatterns.ts、旧themes.tsを置き換え)。
+- QRの色(前景色・グラデーション・四隅の差し色)は自由入力を廃止し、
+  事前に白背景に対して4.5:1以上のコントラストを検証済みの色/グラデーションのみ
+  選べるパレット方式に変更(lib/qr/safeColors.ts、components/ui/SwatchPicker.tsx)。
+  背景色も白/ソフトグレー/クリームの3色のみに限定し、どの組み合わせでも
+  コントラスト基準を満たすことを確認済み。
+- フレームと背景パターンを併用可能にした。両方選択時は、フレームの土台(白い
+  カード部分)に背景パターンを敷き込んで合成する(lib/qr/frameTemplates.tsの
+  各ビルダーが`backgroundFill`引数を受け取れるよう変更、lib/qr/patternComposer.ts
+  で統合)。これによりフレーム選択時に背景が消える問題を解消。
+- 背景パターンを6種類→12種類に拡充(桜/海/宇宙/猫/ゲーム/和柄/雪/紅葉/花火/
+  ハート/音符/森)。色と分離したことで、各パターンごとに安全な色を選定する
+  必要がなくなり、種類を増やしやすくなった。
+- 「何度もリセットされる」問題は、色とパターンの結合が原因で自動補正ループが
+  不安定になっていたことが根本原因だったため、この分離により解消される設計。
+
+■ ファイル変更
+- 新規: lib/qr/backgroundPatterns.ts, lib/qr/safeColors.ts, lib/qr/patternComposer.ts,
+  components/ui/SwatchPicker.tsx, components/qr/BackgroundPanel.tsx,
+  hooks/useComposedPreview.ts
+- 削除: lib/qr/themes.ts, lib/qr/themeComposer.ts, hooks/useFramedPreview.ts,
+  hooks/useThemedPreview.ts, components/qr/ThemePanel.tsx
+- 変更: types/qr.ts(themeKey/themeIntensity→patternKey/patternIntensity)、
+  hooks/useQrDesign.ts(applyTheme→applyBackgroundPattern、フレームとの排他を解消)、
+  hooks/useQualityAssurance.ts、lib/qr/qrStylingClient.ts、lib/qr/exportComposer.ts、
+  lib/qr/frameTemplates.ts、components/qr/DesignPanel.tsx(色picker→安全パレット)、
+  features/qr-studio/QrStudio.tsx
+
+■ 検証
+Playwrightで実機確認: 背景パターン(桜)選択→1クリックで即反映、フレーム(リボン)を
+追加選択しても背景パターンが消えないこと、デザインタブで色(パープル)を安全パレットから
+選んでもフレーム色・背景パターンが両立することを画面で確認。
+「背景パターン+フレーム+色変更」を組み合わせた最終ファイルを実際にダウンロードし、
+OpenCV / pyzbar / zxing-cpp の3エンジン全てで正しくデコードできることを確認。
+tsc/eslint/vitest(22件)/next build 全てpass。backend pytest 13/13 pass(変更なし)。
+
+【2026-07-11】細かい仕上げ4点の修正
+
+ユーザーから以下の指摘を受け、全て対応した。
+1. 「スタイルプリセットはいらない」→ components/qr/StylePresets.tsx・
+   lib/qr/stylePresets.ts を削除し、useQrDesign.ts/QrStudio.tsx/DesignPanel.tsx
+   から関連コード(applyStylePreset等)を全て除去。
+2. 「背景パターン設定時は背景色を選べないようにしたい」→ DesignPanel.tsxで
+   design.patternKey!=="none"の場合、背景色のSwatchPickerを
+   pointer-events-none + 半透明表示にし、「背景パターン使用中は変更できません」
+   と表示。
+3. 「グラデーションにすると四隅が変更されない」→ 実際にバグだった。
+   qrStylingClient.tsのcornersSquareOptions/cornersDotOptionsが、
+   cornerAccentColor未設定時でも常に単色(design.foregroundColor)を使っており、
+   本体がグラデーションになっても四隅だけ古い単色のまま取り残されていた。
+   四隅の差し色が未設定の場合は本体と同じグラデーションを適用するよう修正。
+4. 「四隅の外枠デザインの変更は難しいか」という質問には、実装难易度ではなく
+   意図的な安全策(丸め形状がOpenCVの検出を壊すため)である旨を説明し、
+   読み取り重視の方針なら現状維持を推奨する回答のみ行った(コード変更なし)。
+
+また、ユーザーからの別の指摘「背景・フレームなしだとQR画像が大きすぎて見づらい」も
+同時に対応: QrPreviewCanvas.tsxで、フレーム/背景パターン未使用時の通常プレビュー
+(qr-code-stylingが直接描画するcanvas)にサイズ上限が無く、design.sizePx
+(640px〜4096px)がそのまま表示されていたバグを発見。フレーム/パターン使用時の
+プレビュー(width: min(360px,100%))と同じサイズ制限を適用するよう修正
+(書き出し解像度には影響しない、表示のみの制限)。
+
+■ 検証
+Playwrightで、プリセット欄が消えていること・通常プレビューが適正サイズ(360px程度)
+に収まること・背景パターン使用中は背景色スウォッチが無効化表示されること・
+グラデーションONで四隅もグラデーションになることをそれぞれ画面で確認。
+グラデーション+四隅の組み合わせを実際にダウンロードし、3エンジン全てで
+デコード成功を確認。tsc/eslint/vitest(22件)/next build 全てpass。
+backend pytest 13/13 pass(バックエンドは変更なし)。
+
+【2026-07-11】「驚いてもらえるQR」機能追加(フレーム・差し色)と、そこで発見した
+3件の重大な読み取り不可バグ
+
+ユーザーから「もっと驚いてもらえるQRを」と依頼され、QRの実データ部分は一切加工せず
+安全性を保ったまま、以下を追加した:
+- lib/qr/frameTemplates.ts: リボン/吹き出し/バッジの3種類の装飾フレーム。
+  QR画像(無加工)を<image>としてそのままSVGに埋め込み、周囲にのみ装飾を描く。
+- lib/qr/exportComposer.ts: フレームありなし両対応のダウンロード処理を統一。
+- DesignPanelに「四隅だけ差し色にする」トグルを追加(cornerAccentColor)。
+- hooks/useFramedPreview.ts: プレビューでもダウンロードと同じ見た目を再現。
+
+■ 実装後、ダウンロードしたファイルを実際にバックエンドの3デコードエンジンに
+通して検証したところ、以下3件の重大な「読み取り不可」バグを発見した
+(いずれもこれまでのテストでは気づけていなかった):
+
+1. **四隅の外枠を丸め形状にするとOpenCVが読めない**
+   デフォルトデザイン(cornerSquareType="extra-rounded")を含め、四隅の外枠を
+   "dot"や"extra-rounded"にすると、OpenCVの標準QRCodeDetector(legacy版・
+   Aruco版どちらも)がファインダーパターン(1:1:3:1:1比率の正方形が前提)を
+   検出できずデコードに失敗することが判明。中央のドット(cornerDotType)は無関係。
+   これまでのバックエンドpytestは`qrcode`ライブラリ生成のプレーンな正方形QRのみで
+   検証していたため見逃していた。
+   → 対応: フロントのデフォルト値・全スタイルプリセットをcornerSquareType="square"に
+   統一。DesignPanelから「四隅の外枠デザイン」のUI自体を削除(選んでも安全性を
+   保証できないため)。バックエンドのQrDesignParamsに`corner_square_style`を追加し、
+   全デコーダー不一致時にEC levelエスカレーションより先にこの形状補正を試すよう
+   correction_engine.pyを修正(念のための保険)。回帰防止テストも追加。
+
+2. **白黒反転(ダークモード配色)は2/3のデコーダーで読み取り不可**
+   「ダーク」プリセット(白文字/黒背景)を検証したところ、OpenCV・pyzbarの両方が
+   検出に失敗し、zxing-cppのみ成功した。プレーンな正方形モジュールでも同様に
+   失敗することを確認しており、色の反転そのものが根本原因(コントラスト比の
+   問題ではない)。
+   → 対応: 「ダーク」プリセットを白黒反転ではなく、白背景+ごく暗いネイビー前景色
+   (#12121A)+紫の四隅差し色(#7C3AED)という「反転させずにダークな雰囲気を出す」
+   配色に変更。
+
+3. **グラデーションの明るい側の色が背景とのコントラスト不足**
+   「ポップ」「オーシャン」プリセットのグラデーション終端色(黄色・薄い水色)が、
+   白背景に対してコントラスト比1.7〜1.8:1しかなく、基準(4.5:1)を大きく下回って
+   いた。バックエンドのコントラスト解析が「暗色クラスタ・明色クラスタそれぞれの
+   平均色」で比較していたため、グラデーションの一部だけが薄い状況を検出できて
+   いなかった(見逃し)。
+   → 対応: quality_engine.pyの`_estimate_contrast_ratio`を「クラスタ平均」ではなく
+   「暗色クラスタの中で最も明るいピクセル×明色クラスタの中で最も暗いピクセル」の
+   悲観的な組み合わせで評価するよう変更し、検出漏れを解消。あわせて「ポップ」
+   「オーシャン」のグラデーション色自体も、両端・中間点全てで4.5:1以上を確保できる
+   色(検証済み)に変更した。
+
+■ 最終検証
+- 全6スタイルプリセット × 3フレームテンプレート(なしを含めれば実質7パターン)を
+  実際にダウンロードし、OpenCV / pyzbar / zxing-cpp の3エンジン全てで
+  `https://anthropic.com/` が正しくデコードできることを個別に確認。
+- backend: pytest 11/11 pass(回帰防止テスト1件追加)、ruff clean
+- frontend: tsc/eslint/vitest(22件)/next build 全て継続してpass
+
+■ 教訓
+「見た目のテスト(スクリーンショット確認)」だけでは、読み取り可否という
+QRコードの本質的な品質は検証できない。デザイン変更のたびに実際にダウンロードして
+複数デコーダーに通す検証を今後も徹底する。
+
+====================================================================
+2026-07-11: 四隅の外枠デザイン(コーナースクエア形状)の復元
+====================================================================
+
+■ 受領したプロンプト
+「四隅の外枠はどうにかしてデザイン変えることはできないですか？
+ここだけ浮いてて違和感なんです。」
+(直前のやり取りで「四隅の外枠デザインの変更は難しそうか」という質問に対し、
+レガシーOpenCV検出器の幾何学的制約を理由に「固定のままが安全」と回答していたが、
+ユーザーはそれでも変更できる方法を探すよう明確に要求した)
+
+■ 調査
+四隅の外枠(ファインダーパターン)の形状を変更すると読み取れなくなっていた根本原因は、
+それまで採用していたレガシーの`cv2.QRCodeDetector()`が1:1:3:1:1比率の正方形パターンを
+前提とした幾何学的検出アルゴリズムだったため。OpenCVに他の検出方式がないか調査した結果、
+`opencv-contrib-python-headless`に含まれる`cv2.wechat_qrcode.WeChatQRCode`
+(ニューラルネットベースの検出器、モデルファイル無しでも動作)を発見。
+
+標準アプリの`test-corners.html`で"extra-rounded"と"dot"の2種類のコーナースクエアを
+生成しPlaywrightでPNG抽出、レガシー検出器とWeChatQRCodeで比較した結果:
+- レガシー`cv2.QRCodeDetector()`: 両方とも検出失敗(空文字)
+- WeChatQRCode: 両方とも成功(`https://anthropic.com/`)
+- pyzbar/zxing-cppはそもそも以前から丸め形状でも成功していた
+  (読み取れなかったのはOpenCVのみが原因だったと判明)
+
+既存の検証用PNG47件(demo-shots/)に対する回帰確認: 45/47成功
+(残り2件はQRコード単体でなくUI全体のスクリーンショットのため対象外、実質全件成功)。
+デコード速度も平均15ms・最大372msと実用上問題なし。
+
+■ 対応
+- backend/requirements.txt: `opencv-python-headless` → `opencv-contrib-python-headless`
+- backend/app/services/decode_engines.py: OpenCVデコーダーの実装を
+  `cv2.QRCodeDetector()`から`cv2.wechat_qrcode.WeChatQRCode()`に切り替え。
+  検出器はプロセス内で使い回す(`functools.lru_cache`によるシングルトン)。
+  `_probe_import`も`cv2.wechat_qrcode`属性の有無を見るよう変更(未インストール環境への
+  グレースフルデグレード)。
+- backend/app/services/correction_engine.py: 四隅形状のsquareフォールバックは
+  削除せず「万一の保険」としてコメントのみ更新(WeChatQRCode採用後も通常は
+  発生しないはずだが、セーフティネットとして温存)。
+- frontend/components/qr/DesignPanel.tsx: 「四隅の外枠デザイン」の
+  SegmentedControl(スクエア/ドット/ラウンド)を再追加。
+- frontend/hooks/useQrDesign.ts: `cornerSquareType`の既定値コメントを更新
+  (既定は引き続き"square"だが、丸め形状も選択可能になった経緯を明記)。
+
+■ 検証
+- backend: pytest 13/13 pass(既存の回帰防止テスト含め全て継続してpass)、
+  ruff clean。
+- frontend: tsc/eslint/vitest(22件)/next build 全てclean。
+- 実機の稼働中アプリ(localhost:3000)をPlaywrightで操作し、「四隅の外枠デザイン」で
+  スクエア/ドット/ラウンドの3種を個別に選択→都度、品質チェックが1回で収束し
+  実際にダウンロード→バックエンドの新OpenCV(WeChatQRCode)/pyzbar/zxing-cppの
+  3エンジン全てで`https://anthropic.com/`を正しくデコードできることを確認
+  (9通り全て成功)。
+- 追加で、背景パターン(桜)+フレーム(リボン)+四隅ラウンドという組み合わせでも
+  同様に3エンジン全てで正しくデコードできることを確認(装飾を重ねても
+  QR本体は常に透過合成されるため、読み取り可否に影響しないことを実証)。
+- バックエンドプロセス(uvicorn, port 8080)は`opencv-contrib-python-headless`への
+  差し替え反映のため再起動が必要だったので、稼働プロセスをPIDで確認した上で
+  安全に再起動した。
+
+■ 教訓
+「このエンジンでは技術的に無理」という判断も、根本原因(検出アルゴリズムの実装詳細)
+まで踏み込んで調べ直すと、より頑健な代替手段が見つかることがある。ユーザーが
+「見た目の一貫性」を重視して再検討を求めたことが、結果的にレガシー検出器という
+薄氷の踏み台に気づくきっかけになった。
+
+====================================================================
+2026-07-11: フレームテンプレートの追加・テキストボックスの表示切替・
+バッジデザインの刷新
+====================================================================
+
+■ 受領したプロンプト
+「フレームのテンプレートも増やしてほしい。テキストboxはオンとオフで選べる
+ようにしたい。たとえば吹き出しだとテキスト部分を出すか、消して吹き出しの身に
+なるようにしたい。後、バッジのテンプレートがちょっとよくわからなかった。
+バッジに見えない。」
+
+■ 対応方針
+1. 「テキストボックス」オン/オフ切り替えを全フレーム共通のトグルとして追加。
+   ただし「消す」動作の意味はテンプレートによって使い分けた:
+   - 吹き出し: ユーザーの例の通り、上部のラベル(角丸タグ+テキスト)を
+     要素ごと非表示にし、バブル本体+しっぽだけの「身」にする。
+   - リボン: 帯自体がテンプレートの主役の装飾なので、帯の形は残したまま
+     中の文字だけ消す(空の帯として成立する)。
+   - バッジ(新デザイン): 盾の先端の三角形はシルエットを構成する必須パーツ
+     なので残し、中の文字だけ消す。
+   - チケット/ポラロイド: スタブ/キャプション帯を残したまま文字だけ消す
+     (空白でも本来の形として自然)。
+   - タグ: キャプション帯は付加的な要素のため、吹き出しと同様に帯ごと消す。
+2. バッジテンプレートを「角丸四角+四隅の点+上に重なる丸ラベル」という
+   ただの装飾過多なカードから、「盾(シールド)型」に全面刷新。
+   上部は角丸四角(QR収容領域)、下部中央に尖った先端(差し色で塗り分け)、
+   四隅にリベット風の点、内側に破線のステッチ風の縁取りを追加し、
+   一目でバッジ/認証シールとわかるシルエットにした。QRは常に上部の
+   四角い領域にのみ配置するため、先端の形状は読み取りに一切影響しない。
+3. 新規フレームテンプレートを3種類追加:
+   - チケット: 半券風。SVGのmask機能で左右の切り欠き(半円の穴)を実際に
+     透過させ、点線の切り取り線+縦書きのスタブテキストを配置。
+   - タグ: 値札/荷札風。上部に紐を通す穴付きの尖った「頭」をmaskで
+     くり抜き、下部にキャプション帯(トグルで表示/非表示)を配置。
+   - ポラロイド: インスタント写真風。上下左右のうち下だけ太いキャプション
+     帯にする定番比率、斜体テキストで手書き風の雰囲気を出した。
+
+■ 実装
+- frontend/types/qr.ts: `FrameTemplateKey`に"ticket"|"tag"|"polaroid"を追加、
+  `QrDesignConfig`に`frameTextEnabled: boolean`を追加。
+- frontend/lib/qr/frameTemplates.ts: 全面書き換え。
+  `buildFramedSvg`に`textEnabled`引数を追加、`buildBadgeFrame`を盾型に刷新、
+  `buildTicketFrame`/`buildTagFrame`/`buildPolaroidFrame`を新規追加。
+  チケット/タグはSVG `<mask>`で実際に透過の切り欠きを作る手法を採用
+  (背景色に依存する偽の穴あき表現ではなく、本物の透過にすることで
+  どんな背景パターンと組み合わせても正しく見える)。
+- frontend/lib/qr/patternComposer.ts: `design.frameTextEnabled`を
+  `buildFramedSvg`に渡すよう変更。
+- frontend/hooks/useQrDesign.ts: `frameTextEnabled: true`を既定値に追加。
+- frontend/components/qr/FramePanel.tsx: 「テキストボックス」トグルスイッチを
+  追加(オフの間は呼びかけテキスト入力欄も非表示)。アクセシビリティのため
+  トグルボタンに`aria-label`を付与。
+- frontend/features/qr-studio/QrStudio.tsx: 新しいprops配線。
+
+■ 検証
+- backend: pytest 13/13 pass(既存の回帰防止テスト、フレーム機能は
+  バックエンドの補正ロジックに影響しないため無変更)。
+- frontend: tsc/eslint/vitest(22件)/next build 全てclean。
+- 実機の稼働中アプリ(localhost:3000)をPlaywrightで操作し、6種類の
+  フレームテンプレート(リボン/吹き出し/バッジ/チケット/タグ/ポラロイド)
+  それぞれについてテキストボックスON/OFFの2状態、計12パターンを実際に
+  ダウンロードし、バックエンドのOpenCV(WeChatQRCode)/pyzbar/zxing-cppの
+  3エンジン全てで`https://anthropic.com/`が正しくデコードできることを確認
+  (12パターン×3エンジン=36通り、全て成功)。
+- スクリーンショットで見た目も確認: バッジは盾型のシルエットで「バッジらしさ」
+  が明確になり、吹き出しはテキストオフでラベルタグが完全に消えて綺麗な
+  バブル本体のみになることを確認。
+
+■ 教訓
+「テキストのオン/オフ」という一見単純な要求でも、テンプレートごとに
+「文字を消すと入れ物だけが浮いて見えないか」を個別に判断する必要がある
+(吹き出しのタグ・タグのキャプション帯は入れ物ごと消す/リボンの帯・
+バッジの先端・チケットのスタブ・ポラロイドの余白は入れ物自体がデザインの
+一部なので残す)。機械的に同じ実装を全テンプレートに当てはめず、
+それぞれの形の「何が本質か」を考えて実装を分けたことで、どの組み合わせでも
+不自然にならない結果になった。

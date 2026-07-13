@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  background-color: #fbfbfd;
+  color-scheme: light;
+}
+
+body {
+  color: #1d1d1f;
+  background-color: #fbfbfd;
+  background-image:
+    radial-gradient(640px circle at 12% -6%, rgba(10, 132, 255, 0.16), transparent 60%),
+    radial-gradient(560px circle at 90% 2%, rgba(109, 40, 217, 0.14), transparent 55%),
+    radial-gradient(620px circle at 100% 45%, rgba(194, 24, 91, 0.09), transparent 55%),
+    radial-gradient(680px circle at 50% 115%, rgba(15, 118, 110, 0.11), transparent 60%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
