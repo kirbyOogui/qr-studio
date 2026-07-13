@@ -29,10 +29,27 @@ interface BuildFramedSvgArgs {
   fontKey: FontKey;
 }
 
+export interface FrameCardRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  radius: number;
+}
+
 export interface FramedSvgResult {
   svg: string;
   width: number;
   height: number;
+  /**
+   * リボンの帯・吹き出しのしっぽ・バッジの円・タグの吊り札・ピンの先端など、
+   * カード本体からはみ出す装飾を除いた「カード本体」だけの矩形。
+   * 枠線(borderEnabled)はこの矩形の中だけに描き、はみ出す装飾を突き抜けたり
+   * 装飾の外側の余白を囲ったりしないようにする。
+   */
+  cardRect: FrameCardRect;
+  /** カード本体の縁からQR画像の縁までの、最も狭い辺での余白(px)。 */
+  cardMarginPx: number;
 }
 
 /**
@@ -108,7 +125,13 @@ function buildRibbonFrame(
   ${textEnabled ? `<text x="${width / 2}" y="${bannerY + bannerHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="${fontFamily}" font-size="${fontSize}" font-weight="700" fill="#FFFFFF">${escapeXml(text)}</text>` : ""}
 </svg>`;
 
-  return { svg, width, height };
+  return {
+    svg,
+    width,
+    height,
+    cardRect: { x: 0, y: 0, width, height: pad * 2 + qrSize, radius: cardRadius },
+    cardMarginPx: pad,
+  };
 }
 
 function buildSpeechFrame(
@@ -172,7 +195,13 @@ function buildSpeechFrame(
   }
 </svg>`;
 
-  return { svg, width, height };
+  return {
+    svg,
+    width,
+    height,
+    cardRect: { x: 0, y: bubbleTop, width, height: bubbleHeight, radius: bubbleRadius },
+    cardMarginPx: pad,
+  };
 }
 
 /**
@@ -220,7 +249,13 @@ function buildBadgeFrame(
   }
 </svg>`;
 
-  return { svg, width, height };
+  return {
+    svg,
+    width,
+    height,
+    cardRect: { x: 0, y: 0, width: bodySide, height: bodySide, radius: cardRadius },
+    cardMarginPx: pad,
+  };
 }
 
 /**
@@ -288,7 +323,13 @@ function buildStampFrame(
   }
 </svg>`;
 
-  return { svg, width: bodySide, height: bodySide };
+  return {
+    svg,
+    width: bodySide,
+    height: bodySide,
+    cardRect: { x: 0, y: 0, width: bodySide, height: bodySide, radius: 0 },
+    cardMarginPx: pad,
+  };
 }
 
 /**
@@ -350,7 +391,13 @@ function buildPinFrame(
   }
 </svg>`;
 
-  return { svg, width, height };
+  return {
+    svg,
+    width,
+    height,
+    cardRect: { x: 0, y: 0, width: bodySide, height: bodySide, radius: cardRadius },
+    cardMarginPx: pad,
+  };
 }
 
 /**
@@ -403,7 +450,13 @@ function buildCornerFrame(
   }
 </svg>`;
 
-  return { svg, width, height };
+  return {
+    svg,
+    width,
+    height,
+    cardRect: { x: left, y: top, width: right - left, height: bottom - top, radius: 0 },
+    cardMarginPx: gap,
+  };
 }
 
 /**
@@ -452,7 +505,13 @@ function buildTicketFrame(
   }
 </svg>`;
 
-  return { svg, width, height };
+  return {
+    svg,
+    width,
+    height,
+    cardRect: { x: 0, y: 0, width, height, radius: cardRadius },
+    cardMarginPx: pad,
+  };
 }
 
 /**
@@ -515,7 +574,13 @@ function buildTagFrame(
   }
 </svg>`;
 
-  return { svg, width, height };
+  return {
+    svg,
+    width,
+    height,
+    cardRect: { x: 0, y: bodyTop, width, height: bodyHeight, radius: cardRadius },
+    cardMarginPx: pad,
+  };
 }
 
 /**
@@ -548,5 +613,11 @@ function buildPolaroidFrame(
   }
 </svg>`;
 
-  return { svg, width, height };
+  return {
+    svg,
+    width,
+    height,
+    cardRect: { x: 0, y: 0, width, height, radius: 0 },
+    cardMarginPx: thinBorder,
+  };
 }

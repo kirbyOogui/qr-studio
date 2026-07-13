@@ -6,7 +6,8 @@ import { Slider } from "@/components/ui/Slider";
 import { SwatchPicker } from "@/components/ui/SwatchPicker";
 import { SAFE_BACKGROUNDS, SAFE_COLORS, SAFE_GRADIENTS } from "@/lib/qr/safeColors";
 import { computeMinBorderSizeRatio } from "@/lib/qr/borderConstraints";
-import type { QrDesignConfig, CornerDotType, CornerSquareType, DotType } from "@/types/qr";
+import { buildFramedSvg } from "@/lib/qr/frameTemplates";
+import type { QrDesignConfig, CornerDotType, CornerSquareType, DotType, FrameTemplateKey } from "@/types/qr";
 
 const DOT_TYPE_OPTIONS: { value: DotType; label: string }[] = [
   { value: "square", label: "スクエア" },
@@ -48,7 +49,24 @@ export function DesignPanel({ design, onChange }: DesignPanelProps) {
 
   // 枠線の「大きさ」はQuiet Zoneの内側(=実際のQRモジュール)に重なる手前までしか
   // 縮小できないようにする。URLやサイズが変わるとQuiet Zone幅も変わるため毎回計算する。
-  const minBorderSizeRatio = computeMinBorderSizeRatio(design);
+  // フレーム(リボン・バッジ等)使用時は、枠線はQR画像そのものではなく一回り大きい
+  // 「カード」部分に描かれるため、そのカードのサイズ・余白を軽量に取得して渡す
+  // (実際のダウンロード画像は不要なので、qrDataUrlはダミーの空文字列でよい)。
+  const minBorderSizeRatio =
+    design.frameTemplate === "none"
+      ? computeMinBorderSizeRatio(design)
+      : (() => {
+          const { cardRect, cardMarginPx } = buildFramedSvg({
+            template: design.frameTemplate as Exclude<FrameTemplateKey, "none">,
+            qrDataUrl: "",
+            qrSize: design.sizePx,
+            text: design.frameText,
+            textEnabled: design.frameTextEnabled,
+            accentColor: design.frameColor,
+            fontKey: design.frameFont,
+          });
+          return computeMinBorderSizeRatio(design, Math.max(cardRect.width, cardRect.height), cardMarginPx);
+        })();
 
   return (
     <div className="flex flex-col gap-5">
