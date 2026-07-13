@@ -515,3 +515,72 @@ QRコードの本質的な品質は検証できない。デザイン変更のた
 一部なので残す)。機械的に同じ実装を全テンプレートに当てはめず、
 それぞれの形の「何が本質か」を考えて実装を分けたことで、どの組み合わせでも
 不自然にならない結果になった。
+
+====================================================================
+2026-07-13: 本番公開(GitHub private repo + Cloud Run + Vercel)
+====================================================================
+
+■ 受領したプロンプト
+「公開の準備をしたい」→「githubとverselを使用し、無料で組みたい」
+Backendのホスティングは既存設計通りGoogle Cloud Run無料枠を使用することを確認。
+
+■ 対応
+1. デプロイ前の最終確認
+   - backend: pytest 13/13 pass、ruff clean
+   - frontend: tsc/eslint/vitest(22件)/next build 全てclean
+   - `npm run typecheck`等のNode.jsコマンドは非ASCIIパスクラッシュ問題があるため、
+     スクラッチパッド配下のASCIIパスにコピーして検証(既知の回避策を適用)。
+2. `npm audit`でjspdf(直接依存)にCritical(HTML Injection/XSS等)を含む
+   複数の脆弱性を検出。実際の使用箇所(`lib/qr/pdfExport.ts`)は
+   `addImage(dataUrl, "PNG", ...)`のみでjsPDFの`.html()`/AcroForm/addJS等の
+   脆弱な機能は未使用と確認した上で、念のためjspdf `^2.5.2`→`^4.2.1`に更新。
+   ASCIIパスコピーでtypecheck/lint/vitest/buildが全てclean であることを確認後、
+   本体プロジェクトのpackage.json/package-lock.jsonに反映。
+   vitest/esbuild/next内部postcssの残存脆弱性は開発専用ツールでの露出のみ
+   (本番バンドルに含まれない、あるいはVite UIサーバー等未使用機能経由)のため
+   本番デプロイの障害にはならないと判断し、今回は据え置き。
+3. ルートのCLAUDE.mdが別プロジェクト(LINE botシフト管理ツール)向けの
+   誤った内容だったため、ユーザー確認の上削除。
+4. git初期化、.envや.venv/node_modulesが含まれていないことを確認した上で
+   初回コミット。GitHub CLI(`gh`)経由でprivateリポジトリ
+   `kirbyOogui/qr-studio` を作成しpush。
+5. GCP新規プロジェクト`qr-studio-08772`を作成し課金アカウントをリンク、
+   Cloud Run/Artifact Registry/Cloud Build APIを有効化。
+   Artifact Registryリポジトリ作成直後はIAM反映待ちでPERMISSION_DENIEDが
+   発生したため、Monitorでリトライループを回して解決。
+   `gcloud builds submit`でDockerイメージをビルド・push、
+   `gcloud run deploy`で`qr-studio-backend`をasia-northeast1にデプロイ
+   (min-instances=0, max-instances=3, --allow-unauthenticated)。
+6. Vercel CLIでfrontendをリンクし、`NEXT_PUBLIC_API_BASE_URL`にCloud Run URLを
+   設定した上で`vercel --prod`。本番URL`https://qr-studio-livid.vercel.app`を取得。
+7. CloudRunの`ALLOWED_ORIGINS`をVercel本番ドメインに限定して再デプロイ。
+   PowerShellでは`--set-env-vars`にダブルクォートを含むJSON配列
+   (`["https://..."]`)を渡すと引用符が消えて不正なJSONになり
+   コンテナ起動失敗(健康チェックタイムアウト)を引き起こすことが判明。
+   `--env-vars-file`でYAMLファイル経由に切り替えて解決。
+
+■ 検証
+- Backend本番: `/api/v1/healthz`が200を返すことを確認。
+  実際にPythonでQR画像を生成しBase64化した上で本番の
+  `/api/v1/qr/quality-check`にJSONでPOSTし、
+  `decoders_matched: ["opencv","pyzbar","zxing-cpp"]`で3エンジン全て
+  デコード成功することを確認(passed: true)。
+- CORS: Vercel本番ドメインからのプリフライト(OPTIONS)が
+  `access-control-allow-origin`にそのドメインのみを返すことを確認。
+- Frontend本番: CSP/HSTS/X-Frame-Options/X-Content-Type-Options/
+  Referrer-Policy/Permissions-Policyが全て正しく付与されていることを
+  レスポンスヘッダーで確認。
+
+■ 教訓
+- Windows PowerShellの`--set-env-vars`のようなカンマ/クォート区切りの
+  引数は、値自体にクォートやカンマを含むと壊れやすい。JSON文字列等の
+  複雑な値を渡す場合は最初から`--env-vars-file`のようなファイル経由の
+  手段を使うほうが安全で、無駄なデプロイ失敗を減らせる。
+- GCPプロジェクト作成直後のIAM権限は数十秒程度反映に遅延することがある
+  (owner権限があってもPERMISSION_DENIEDになりうる)。Monitorのような
+  リトライ機構であらかじめ吸収しておくと待ち時間のロスが少ない。
+- `npm audit`の指摘は実際の利用箇所(呼び出しているAPI)を確認した上で
+  対応要否を判断すべき。直接依存かつ実際に到達可能な脆弱性(jspdfの
+  addImage経路は影響なし、と個別に切り分け)は優先して修正し、
+  開発専用ツールの残存脆弱性まで無理に追わないことで、
+  本番公開までの時間とリスクのバランスを取った。
