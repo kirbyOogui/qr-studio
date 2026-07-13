@@ -30,7 +30,11 @@ export function Slider({ id, label, min, max, step = 1, value, onChange, formatV
         step={step}
         value={value}
         onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(Number(event.target.value))}
-        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/10 accent-accent"
+        // touch-none(touch-action: none)が無いと、親要素(カスタマイズ欄)に
+        // 設定したtouch-pan-y(縦スワイプ専用)の影響で、このつまみの横方向の
+        // ドラッグ操作がスクロール判定と競合し、ドラッグできたりできなかったり
+        // する不具合が起きる。スライダー自身では常にドラッグを最優先させる。
+        className="h-1.5 w-full touch-none cursor-pointer appearance-none rounded-full bg-black/10 accent-accent"
       />
     </div>
   );

@@ -213,7 +213,7 @@ export function DesignPanel({ design, onChange }: DesignPanelProps) {
               id="border-width"
               label="枠線の太さ"
               min={1}
-              max={24}
+              max={48}
               value={design.borderWidthPx}
               onChange={(value) => onChange("borderWidthPx", value)}
               formatValue={(v) => `${v}px`}
