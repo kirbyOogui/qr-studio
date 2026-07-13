@@ -133,7 +133,14 @@ export function QrStudio() {
                   key: "logo",
                   label: "ロゴ",
                   accentColor: "#0F766E",
-                  content: <LogoUploader logo={design.logo} onChange={(logo) => update("logo", logo)} />,
+                  content: (
+                    <LogoUploader
+                      logo={design.logo}
+                      onChange={(logo) => update("logo", logo)}
+                      errorCorrection={design.errorCorrection}
+                      onErrorCorrectionChange={(errorCorrection) => update("errorCorrection", errorCorrection)}
+                    />
+                  ),
                 },
                 {
                   key: "size",

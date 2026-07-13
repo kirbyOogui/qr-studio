@@ -21,12 +21,16 @@ export interface GradientConfig {
   stops: [GradientStop, GradientStop];
 }
 
+export type LogoShape = "square" | "circle";
+
 export interface LogoConfig {
-  /** data URL (メモリ上のみで保持し、サーバーへの永続化は行わない) */
+  /** 中央クロップ+形状マスク済みのPNG data URL (メモリ上のみで保持し、サーバーへの永続化は行わない) */
   dataUrl: string;
   /** QR全体の幅に対する比率 (0〜0.4) */
   sizeRatio: number;
   fileName: string;
+  /** ロゴの切り抜き形状。四角=正方形中央クロップ、丸=それを円形マスク。 */
+  shape: LogoShape;
 }
 
 export type FrameTemplateKey =
