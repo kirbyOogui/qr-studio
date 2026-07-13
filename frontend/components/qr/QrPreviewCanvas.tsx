@@ -35,9 +35,14 @@ export function QrPreviewCanvas({ design, containerRef, status, composedPreview 
           />
         ) : hasUrl ? (
           <div
-            className="flex items-center justify-center bg-white p-4 transition-shadow"
+            className="flex items-center justify-center p-4 transition-shadow"
             style={{
               width: "min(360px, 100%)",
+              // 枠線とQR本体の間の余白(quiet zone相当)がQRの背景色と別の色に
+              // ならないよう、常にdesign.backgroundColorに合わせる(以前は
+              // 固定で白だったため、背景色を変えると枠線との間に白い隙間が
+              // 見えてしまっていた)。
+              backgroundColor: design.backgroundColor,
               borderRadius: `${design.cornerRadiusPx}px`,
               border: design.borderEnabled
                 ? `${design.borderWidthPx}px solid ${design.borderColor}`
