@@ -12,7 +12,6 @@ import { DesignPanel } from "@/components/qr/DesignPanel";
 import { LogoUploader } from "@/components/qr/LogoUploader";
 import { SizePanel } from "@/components/qr/SizePanel";
 import { FramePanel } from "@/components/qr/FramePanel";
-import { BackgroundPanel } from "@/components/qr/BackgroundPanel";
 import { DownloadPanel } from "@/components/qr/DownloadPanel";
 import { Card } from "@/components/ui/Card";
 import { Tabs } from "@/components/ui/Tabs";
@@ -24,8 +23,6 @@ export function QrStudio() {
     applyPreset,
     applyCorrections,
     applyContrastCorrection,
-    applyBackgroundPattern,
-    applyPatternIntensityStepDown,
     applyFrameTemplate,
     resetDesign,
     isUrlProvided,
@@ -33,7 +30,7 @@ export function QrStudio() {
   const { containerRef, exportPngBase64, getRawData } = useQrStylingInstance(design);
 
   // 品質チェックには「実際にダウンロードされる最終画像」を渡す必要がある。
-  // フレーム/背景パターン使用時は合成後の画像を、それ以外は生のQR画像を使う。
+  // フレーム使用時は合成後の画像を、それ以外は生のQR画像を使う。
   const qualityCheckImage = useCallback(
     () => renderComposedPngBase64(design, exportPngBase64),
     [design, exportPngBase64],
@@ -45,7 +42,6 @@ export function QrStudio() {
     exportPngBase64: qualityCheckImage,
     applyCorrections,
     applyContrastCorrection,
-    applyPatternIntensityStepDown,
   });
   const composedPreview = useComposedPreview(design, exportPngBase64);
 
@@ -105,14 +101,6 @@ export function QrStudio() {
                   content: <DesignPanel design={design} onChange={update} />,
                 },
                 {
-                  key: "background",
-                  label: "背景",
-                  accentColor: "#6D28D9",
-                  content: (
-                    <BackgroundPanel patternKey={design.patternKey} onSelect={applyBackgroundPattern} />
-                  ),
-                },
-                {
                   key: "frame",
                   label: "フレーム",
                   accentColor: "#C1440E",
@@ -122,10 +110,12 @@ export function QrStudio() {
                       frameText={design.frameText}
                       frameTextEnabled={design.frameTextEnabled}
                       frameColor={design.frameColor}
+                      frameFont={design.frameFont}
                       onChangeTemplate={applyFrameTemplate}
                       onChangeText={(frameText) => update("frameText", frameText)}
                       onChangeTextEnabled={(enabled) => update("frameTextEnabled", enabled)}
                       onChangeColor={(color) => update("frameColor", color)}
+                      onChangeFont={(frameFont) => update("frameFont", frameFont)}
                     />
                   ),
                 },

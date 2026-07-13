@@ -33,8 +33,6 @@ interface DesignPanelProps {
 }
 
 export function DesignPanel({ design, onChange }: DesignPanelProps) {
-  const hasBackgroundPattern = design.patternKey !== "none";
-
   const selectedGradientKey =
     SAFE_GRADIENTS.find(
       (g) =>
@@ -105,27 +103,20 @@ export function DesignPanel({ design, onChange }: DesignPanelProps) {
         )}
 
         <div>
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-medium text-ink/80">背景色</p>
-            {hasBackgroundPattern && (
-              <p className="text-xs text-ink/40">背景パターン使用中は変更できません</p>
-            )}
-          </div>
-          <div
-            className={hasBackgroundPattern ? "pointer-events-none opacity-40" : undefined}
-            aria-disabled={hasBackgroundPattern}
-          >
-            <SwatchPicker
-              ariaLabel="背景色"
-              columns={3}
-              value={SAFE_BACKGROUNDS.find((c) => c.color === design.backgroundColor)?.key ?? SAFE_BACKGROUNDS[0]!.key}
-              onChange={(key) => {
-                const found = SAFE_BACKGROUNDS.find((c) => c.key === key);
-                if (found) onChange("backgroundColor", found.color);
-              }}
-              options={SAFE_BACKGROUNDS.map((c) => ({ key: c.key, label: c.label, swatchCss: c.color }))}
-            />
-          </div>
+          <p className="mb-2 text-sm font-medium text-ink/80">背景色</p>
+          <SwatchPicker
+            ariaLabel="背景色"
+            columns={4}
+            value={SAFE_BACKGROUNDS.find((c) => c.color === design.backgroundColor)?.key ?? SAFE_BACKGROUNDS[0]!.key}
+            onChange={(key) => {
+              const found = SAFE_BACKGROUNDS.find((c) => c.key === key);
+              if (found) onChange("backgroundColor", found.color);
+            }}
+            options={SAFE_BACKGROUNDS.map((c) => ({ key: c.key, label: c.label, swatchCss: c.color }))}
+          />
+          <p className="mt-2 text-xs text-ink/40">
+            読み取りやすさを保証するため、検証済みの色のみ選べます。
+          </p>
         </div>
       </div>
 

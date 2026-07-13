@@ -7,6 +7,8 @@ from app.models.schemas import CornerSquareStyle, DotStyle, ErrorCorrectionLevel
 from app.services.quality_engine import _MAX_LOGO_RATIO, _MIN_QUIET_ZONE_MODULES, QualityMetrics
 
 _MAX_SIZE_PX = 4096
+# これ未満までロゴを縮小しても意味をなさない(視認できない)ための下限。
+_MIN_USABLE_LOGO_RATIO = 0.1
 
 _EC_ESCALATION_LADDER = [
     ErrorCorrectionLevel.L,
@@ -60,6 +62,13 @@ def build_corrections(
             corner_square_style = CornerSquareStyle.SQUARE
         elif error_correction != ErrorCorrectionLevel.H:
             error_correction = _escalate_error_correction(error_correction)
+        elif logo_ratio is not None and logo_ratio > _MIN_USABLE_LOGO_RATIO:
+            # 四隅の形状・EC levelともに既に最大までエスカレーション済みでなお
+            # 実際のデコードに失敗する場合の最終手段。_MAX_LOGO_RATIOは
+            # 幅比率ベースの静的な上限に過ぎず、実機での読み取り可否を
+            # 保証するものではないため、ここで初めて実際のデコード結果を見て
+            # ロゴ自体を段階的に縮小する(収束するまで再検証ループが繰り返す)。
+            logo_ratio = max(_MIN_USABLE_LOGO_RATIO, round(logo_ratio * 0.85, 4))
 
     if not metrics.size_ok:
         size_px = max(size_px, metrics.recommended_min_size_px)

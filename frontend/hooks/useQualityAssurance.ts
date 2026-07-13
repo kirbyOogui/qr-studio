@@ -29,8 +29,6 @@ interface UseQualityAssuranceArgs {
   exportPngBase64: () => Promise<string | null>;
   applyCorrections: (patch: CorrectionPatch) => void;
   applyContrastCorrection: (foreground: string, background: string) => void;
-  /** 背景パターンの濃さを1段階安全な方へ下げる。既に最も控えめならfalseを返す。 */
-  applyPatternIntensityStepDown: () => boolean;
 }
 
 /**
@@ -47,7 +45,6 @@ export function useQualityAssurance({
   exportPngBase64,
   applyCorrections,
   applyContrastCorrection,
-  applyPatternIntensityStepDown,
 }: UseQualityAssuranceArgs): { status: QaStatus } {
   const [asyncStatus, setAsyncStatus] = useState<QaStatus>("checking");
   const attemptRef = useRef(0);
@@ -97,14 +94,6 @@ export function useQualityAssurance({
         });
         if (cancelled) return;
         attemptRef.current += 1;
-
-        const hasIssue = response.contrast_adjustment_needed || Boolean(response.corrections);
-        if (hasIssue && debouncedDesign.patternKey !== "none" && applyPatternIntensityStepDown()) {
-          // 背景パターン使用時は、EC levelや配色そのものをいじる前に
-          // まずパターンの濃さを1段階控えめにして再検証する
-          // (見た目への影響が最も小さい補正から試す)。
-          return;
-        }
 
         // コントラスト補正(色)と構造的補正(サイズ・EC level等)は互いに独立した
         // 軸なので、両方問題があれば同じラウンドでまとめて適用する

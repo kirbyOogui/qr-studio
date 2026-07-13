@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from "react";
 import type { QrDesignConfig, SizePresetKey } from "@/types/qr";
 import { resolvePresetSize, SIZE_PRESETS } from "@/lib/qr/presets";
 import { DEFAULT_FRAME_TEXT } from "@/lib/qr/frameTemplates";
-import { stepDownIntensity, type PatternDef } from "@/lib/qr/backgroundPatterns";
 
 export const DEFAULT_DESIGN: QrDesignConfig = {
   url: "",
@@ -29,8 +28,7 @@ export const DEFAULT_DESIGN: QrDesignConfig = {
   frameText: DEFAULT_FRAME_TEXT,
   frameTextEnabled: true,
   frameColor: "#000000",
-  patternKey: "none",
-  patternIntensity: 2,
+  frameFont: "gothic",
 };
 
 export function useQrDesign() {
@@ -77,34 +75,7 @@ export function useQrDesign() {
     setDesign((prev) => ({ ...prev, foregroundColor: foreground, backgroundColor: background }));
   }, []);
 
-  const applyBackgroundPattern = useCallback((pattern: PatternDef | null) => {
-    // 背景パターンはQRの色(foregroundColor/gradient)には一切影響しない、
-    // 純粋な装飾。フレームとも併用できる(排他にしない)。
-    setDesign((prev) => ({
-      ...prev,
-      patternKey: pattern ? pattern.key : "none",
-      // 「大胆な見た目」を既定にし、デコード検証に失敗した場合のみ
-      // はしごを1段階ずつ下げて安全な方へ調整する(useQualityAssurance参照)。
-      patternIntensity: 2,
-    }));
-  }, []);
-
-  const applyPatternIntensityStepDown = useCallback((): boolean => {
-    if (design.patternKey === "none") return false;
-    const next = stepDownIntensity(design.patternIntensity);
-    if (next !== null) {
-      setDesign((prev) => ({ ...prev, patternIntensity: next }));
-      return true;
-    }
-    // 最も控えめな段階でもまだ読み取れない場合の最終手段として、
-    // 背景パターン自体をオフにする(見た目より読み取り可否を優先する)。
-    // 色には一切触れていないため、これだけで安全な状態に戻る。
-    setDesign((prev) => ({ ...prev, patternKey: "none" }));
-    return true;
-  }, [design.patternKey, design.patternIntensity]);
-
   const applyFrameTemplate = useCallback((template: QrDesignConfig["frameTemplate"]) => {
-    // 背景パターンと併用できるため、フレーム選択では他の設定を変更しない。
     setDesign((prev) => ({ ...prev, frameTemplate: template }));
   }, []);
 
@@ -122,8 +93,6 @@ export function useQrDesign() {
     applyPreset,
     applyCorrections,
     applyContrastCorrection,
-    applyBackgroundPattern,
-    applyPatternIntensityStepDown,
     applyFrameTemplate,
     resetDesign,
     isUrlProvided,

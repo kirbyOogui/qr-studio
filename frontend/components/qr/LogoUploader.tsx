@@ -4,11 +4,13 @@ import { useId, useRef, useState } from "react";
 import { Slider } from "@/components/ui/Slider";
 import { Spinner } from "@/components/ui/Spinner";
 import { LogoCropper } from "@/components/qr/LogoCropper";
+import { LogoTextComposer, type TextLogoDraft } from "@/components/qr/LogoTextComposer";
 import { useDragAndDropFile } from "@/hooks/useDragAndDropFile";
 import { sniffImageType, MAX_LOGO_FILE_BYTES } from "@/lib/security/fileValidation";
 import { sanitizeSvg } from "@/lib/security/svgSanitize";
-import { processLogoImage, type CropRect } from "@/lib/qr/logoProcessing";
+import { processLogoImage, renderTextLogo, type CropRect } from "@/lib/qr/logoProcessing";
 import { MAX_LOGO_RATIO_BY_EC, LOGO_SIZE_MIN_RATIO, LOGO_ERROR_CORRECTION } from "@/lib/qr/logoConstraints";
+import { SAFE_BACKGROUNDS, SAFE_COLORS } from "@/lib/qr/safeColors";
 import type { ErrorCorrectionLevel, LogoConfig, LogoShape } from "@/types/qr";
 
 interface LogoUploaderProps {
@@ -19,13 +21,26 @@ interface LogoUploaderProps {
 }
 
 const DEFAULT_SHAPE: LogoShape = "square";
-const DEFAULT_SIZE_RATIO = 0.24;
+const DEFAULT_SIZE_RATIO = 0.28;
+const DEFAULT_TEXT_DRAFT: TextLogoDraft = {
+  text: "",
+  fontKey: "gothic",
+  fillColor: SAFE_BACKGROUNDS[0]!.color,
+  textColor: SAFE_COLORS[0]!.color,
+  shape: DEFAULT_SHAPE,
+};
 
 interface PendingUpload {
   sourceDataUrl: string;
   fileName: string;
   initialCrop?: CropRect;
 }
+
+// ロゴの「元になった情報」。形状(四角/丸)を切り替えたり再編集したりするたびに
+// ここから再生成する(logo.dataUrlは既に加工・描画済みのため再利用できない)。
+type LogoSource =
+  | { type: "image"; sourceDataUrl: string; crop: CropRect }
+  | { type: "text"; text: string; fontKey: TextLogoDraft["fontKey"]; fillColor: string; textColor: string };
 
 async function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -40,13 +55,21 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
-  // 形状の切り替えや再トリミングのたびに元画像へ戻れるよう、加工前の画像と
-  // 最後に確定したトリミング範囲を保持しておく(logo.dataUrlは加工済みのため)。
-  const [cropSource, setCropSource] = useState<{ sourceDataUrl: string; crop: CropRect } | null>(null);
+  const [pendingText, setPendingText] = useState<TextLogoDraft | null>(null);
+  const [logoSource, setLogoSource] = useState<LogoSource | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const inputId = useId();
 
   const maxSizeRatio = MAX_LOGO_RATIO_BY_EC[errorCorrection];
+
+  const promoteToBestErrorCorrection = () => {
+    // ロゴを初めて追加するときは、誤り訂正の余力が最も大きいレベルに引き上げて
+    // ロゴを安全に大きく載せられるようにする(Mのままだと20%までしか許容されず
+    // 見た目より優先して自動的に縮小されてしまうため)。
+    if (errorCorrection !== LOGO_ERROR_CORRECTION) {
+      onErrorCorrectionChange(LOGO_ERROR_CORRECTION);
+    }
+  };
 
   const handleFile = async (file: File) => {
     setError(null);
@@ -80,14 +103,9 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
     setIsProcessing(true);
     try {
       const dataUrl = await processLogoImage(sourceDataUrl, shape, crop);
-      setCropSource({ sourceDataUrl, crop });
+      setLogoSource({ type: "image", sourceDataUrl, crop });
       onChange({ dataUrl, sizeRatio: logo?.sizeRatio ?? DEFAULT_SIZE_RATIO, fileName, shape });
-      // ロゴを初めて追加するときは、誤り訂正の余力が最も大きいレベルに引き上げて
-      // ロゴを安全に大きく載せられるようにする(Mのままだと18%までしか許容されず
-      // 見た目より優先して自動的に縮小されてしまうため)。
-      if (isFirstLogo && errorCorrection !== LOGO_ERROR_CORRECTION) {
-        onErrorCorrectionChange(LOGO_ERROR_CORRECTION);
-      }
+      if (isFirstLogo) promoteToBestErrorCorrection();
     } catch {
       setError("画像の処理に失敗しました。別の画像でお試しください。");
     } finally {
@@ -98,23 +116,93 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
 
   const handleCropCancel = () => setPendingUpload(null);
 
-  const handleEditCrop = () => {
+  const handleTextConfirm = (draft: TextLogoDraft) => {
+    const isFirstLogo = !logo;
+    try {
+      const dataUrl = renderTextLogo(draft);
+      setLogoSource({
+        type: "text",
+        text: draft.text,
+        fontKey: draft.fontKey,
+        fillColor: draft.fillColor,
+        textColor: draft.textColor,
+      });
+      onChange({
+        dataUrl,
+        sizeRatio: logo?.sizeRatio ?? DEFAULT_SIZE_RATIO,
+        fileName: draft.text,
+        shape: draft.shape,
+      });
+      if (isFirstLogo) promoteToBestErrorCorrection();
+    } catch {
+      setError("テキストロゴの作成に失敗しました。");
+    } finally {
+      setPendingText(null);
+    }
+  };
+
+  const handleTextCancel = () => setPendingText(null);
+
+  const handleStartTextLogo = () => {
+    setError(null);
+    setPendingText(
+      logoSource?.type === "text"
+        ? {
+            text: logoSource.text,
+            fontKey: logoSource.fontKey,
+            fillColor: logoSource.fillColor,
+            textColor: logoSource.textColor,
+            shape: logo?.shape ?? DEFAULT_SHAPE,
+          }
+        : DEFAULT_TEXT_DRAFT,
+    );
+  };
+
+  const handleEdit = () => {
     if (!logo) return;
-    if (cropSource) {
-      setPendingUpload({ sourceDataUrl: cropSource.sourceDataUrl, fileName: logo.fileName, initialCrop: cropSource.crop });
+    if (logoSource?.type === "text") {
+      setPendingText({
+        text: logoSource.text,
+        fontKey: logoSource.fontKey,
+        fillColor: logoSource.fillColor,
+        textColor: logoSource.textColor,
+        shape: logo.shape,
+      });
+      return;
+    }
+    if (logoSource?.type === "image") {
+      setPendingUpload({ sourceDataUrl: logoSource.sourceDataUrl, fileName: logo.fileName, initialCrop: logoSource.crop });
     } else {
-      // 元画像を保持していない場合(再訪時など)は、現在の加工済み画像を対象にする。
+      // 元情報を保持していない場合(再訪時など)は、現在の加工済み画像を対象にする。
       setPendingUpload({ sourceDataUrl: logo.dataUrl, fileName: logo.fileName });
     }
   };
 
   const handleShapeChange = async (shape: LogoShape) => {
     if (!logo || shape === logo.shape) return;
+
+    if (logoSource?.type === "text") {
+      try {
+        const dataUrl = renderTextLogo({
+          text: logoSource.text,
+          fontKey: logoSource.fontKey,
+          fillColor: logoSource.fillColor,
+          textColor: logoSource.textColor,
+          shape,
+        });
+        onChange({ ...logo, dataUrl, shape });
+      } catch {
+        setError("テキストロゴの作成に失敗しました。");
+      }
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      const dataUrl = cropSource
-        ? await processLogoImage(cropSource.sourceDataUrl, shape, cropSource.crop)
-        : await processLogoImage(logo.dataUrl, shape);
+      const dataUrl =
+        logoSource?.type === "image"
+          ? await processLogoImage(logoSource.sourceDataUrl, shape, logoSource.crop)
+          : await processLogoImage(logo.dataUrl, shape);
       onChange({ ...logo, dataUrl, shape });
     } catch {
       setError("画像の処理に失敗しました。");
@@ -141,6 +229,10 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
     );
   }
 
+  if (pendingText) {
+    return <LogoTextComposer initial={pendingText} onConfirm={handleTextConfirm} onCancel={handleTextCancel} />;
+  }
+
   return (
     <div>
       {logo ? (
@@ -163,7 +255,7 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
           <div className="flex-1 space-y-3">
             <div>
               <span className="mb-2 block text-sm font-medium text-ink/80">切り抜き形状</span>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   disabled={isProcessing}
@@ -193,10 +285,10 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
                 <button
                   type="button"
                   disabled={isProcessing}
-                  onClick={handleEditCrop}
+                  onClick={handleEdit}
                   className="rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium text-ink/60 hover:border-black/20 disabled:opacity-50"
                 >
-                  トリミングを編集
+                  {logoSource?.type === "text" ? "テキストを編集" : "トリミングを編集"}
                 </button>
               </div>
             </div>
@@ -214,7 +306,7 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
           <button
             type="button"
             onClick={() => {
-              setCropSource(null);
+              setLogoSource(null);
               onChange(null);
             }}
             className="text-sm font-medium text-red-500 hover:underline"
@@ -223,32 +315,41 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
           </button>
         </div>
       ) : (
-        <div
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          className={`flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
-            isDraggingOver ? "border-accent bg-accent/5" : "border-black/10"
-          }`}
-        >
-          <p className="text-sm text-ink/60">
-            ロゴ画像をドラッグ&ドロップ、または
-            <label htmlFor={inputId} className="ml-1 cursor-pointer text-accent hover:underline">
-              ファイルを選択
-            </label>
+        <div>
+          <div
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            className={`flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
+              isDraggingOver ? "border-accent bg-accent/5" : "border-black/10"
+            }`}
+          >
+            <p className="text-sm text-ink/60">
+              ロゴ画像をドラッグ&ドロップ、または
+              <label htmlFor={inputId} className="ml-1 cursor-pointer text-accent hover:underline">
+                ファイルを選択
+              </label>
+            </p>
+            <p className="text-xs text-ink/30">PNG・SVG・JPG / 5MBまで</p>
+            <input
+              ref={fileInputRef}
+              id={inputId}
+              type="file"
+              accept="image/png,image/jpeg,image/svg+xml"
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleFile(file);
+              }}
+            />
+          </div>
+          <p className="mt-3 text-center text-sm text-ink/50">
+            画像が無くても、
+            <button type="button" onClick={handleStartTextLogo} className="text-accent hover:underline">
+              テキストでロゴを作成
+            </button>
+            できます
           </p>
-          <p className="text-xs text-ink/30">PNG・SVG・JPG / 5MBまで</p>
-          <input
-            ref={fileInputRef}
-            id={inputId}
-            type="file"
-            accept="image/png,image/jpeg,image/svg+xml"
-            className="sr-only"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleFile(file);
-            }}
-          />
         </div>
       )}
       {error && (

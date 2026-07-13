@@ -40,14 +40,10 @@ export function buildQrStylingOptions(design: QrDesignConfig): QrStylingOptions 
       errorCorrectionLevel: design.errorCorrection,
     },
     dotsOptions,
-    // フレーム・背景パターン使用時は背景を透明にして書き出し、その上に
-    // 装飾/柄を透かして重ねる(lib/qr/patternComposer.ts)。
-    // QRのモジュール自体は一切変更しない。
+    // フレーム使用時は背景を透明にして書き出し、その上に装飾を重ねる
+    // (lib/qr/patternComposer.ts)。QRのモジュール自体は一切変更しない。
     backgroundOptions: {
-      color:
-        design.frameTemplate !== "none" || design.patternKey !== "none"
-          ? "rgba(0,0,0,0)"
-          : design.backgroundColor,
+      color: design.frameTemplate !== "none" ? "rgba(0,0,0,0)" : design.backgroundColor,
     },
     cornersSquareOptions: { type: design.cornerSquareType, ...cornerColorOptions },
     cornersDotOptions: { type: design.cornerDotType, ...cornerColorOptions },

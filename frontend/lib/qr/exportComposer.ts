@@ -11,7 +11,7 @@ interface ComposeArgs {
 
 /**
  * ダウンロード用のBlobを組み立てる。
- * フレーム・背景パターンいずれも未使用ならqr-code-stylingの出力をそのまま使い、
+ * フレーム未使用ならqr-code-stylingの出力をそのまま使い、
  * 使用時はQR画像(無加工)を合成SVGに埋め込んでから書き出す。
  */
 export async function composeDownloadBlob({
@@ -20,7 +20,7 @@ export async function composeDownloadBlob({
   exportPngBase64,
   getRawData,
 }: ComposeArgs): Promise<Blob | null> {
-  const needsCompose = design.frameTemplate !== "none" || design.patternKey !== "none";
+  const needsCompose = design.frameTemplate !== "none";
 
   if (!needsCompose) {
     if (format === "pdf") return getRawData("png");

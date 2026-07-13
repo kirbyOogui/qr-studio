@@ -1,4 +1,5 @@
-import type { FrameTemplateKey } from "@/types/qr";
+import { FONT_STACKS } from "./fonts";
+import type { FontKey, FrameTemplateKey } from "@/types/qr";
 
 export const FRAME_TEMPLATES: { value: FrameTemplateKey; label: string }[] = [
   { value: "none", label: "なし" },
@@ -15,14 +16,6 @@ export const FRAME_TEMPLATES: { value: FrameTemplateKey; label: string }[] = [
 
 export const DEFAULT_FRAME_TEXT = "スキャンしてね";
 
-/** 背景パターンと併用する場合に、フレームの土台(白いカード部分)へ差し込むSVG断片。 */
-export interface FrameBackgroundFill {
-  /** <defs>内に追加する<pattern>定義など。 */
-  defs: string;
-  /** fill属性に渡す値。例: "url(#bg-pattern)"。 */
-  fillRef: string;
-}
-
 interface BuildFramedSvgArgs {
   template: Exclude<FrameTemplateKey, "none">;
   qrDataUrl: string;
@@ -33,8 +26,7 @@ interface BuildFramedSvgArgs {
    *  各ビルダー関数のコメントを参照)。 */
   textEnabled: boolean;
   accentColor: string;
-  /** 背景パターンも併用する場合に指定する。省略時は白背景になる。 */
-  backgroundFill?: FrameBackgroundFill | null;
+  fontKey: FontKey;
 }
 
 export interface FramedSvgResult {
@@ -55,27 +47,28 @@ export function buildFramedSvg({
   text,
   textEnabled,
   accentColor,
-  backgroundFill,
+  fontKey,
 }: BuildFramedSvgArgs): FramedSvgResult {
+  const fontFamily = FONT_STACKS[fontKey];
   switch (template) {
     case "ribbon":
-      return buildRibbonFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, backgroundFill ?? null);
+      return buildRibbonFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, fontFamily);
     case "speech":
-      return buildSpeechFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, backgroundFill ?? null);
+      return buildSpeechFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, fontFamily);
     case "badge":
-      return buildBadgeFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, backgroundFill ?? null);
+      return buildBadgeFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, fontFamily);
     case "ticket":
-      return buildTicketFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, backgroundFill ?? null);
+      return buildTicketFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, fontFamily);
     case "tag":
-      return buildTagFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, backgroundFill ?? null);
+      return buildTagFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, fontFamily);
     case "polaroid":
-      return buildPolaroidFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, backgroundFill ?? null);
+      return buildPolaroidFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, fontFamily);
     case "stamp":
-      return buildStampFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, backgroundFill ?? null);
+      return buildStampFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, fontFamily);
     case "pin":
-      return buildPinFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, backgroundFill ?? null);
+      return buildPinFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, fontFamily);
     case "corner":
-      return buildCornerFrame(qrDataUrl, qrSize, text, textEnabled, accentColor);
+      return buildCornerFrame(qrDataUrl, qrSize, text, textEnabled, accentColor, fontFamily);
   }
 }
 
@@ -94,7 +87,7 @@ function buildRibbonFrame(
   text: string,
   textEnabled: boolean,
   accentColor: string,
-  backgroundFill: FrameBackgroundFill | null,
+  fontFamily: string,
 ): FramedSvgResult {
   const pad = Math.round(qrSize * 0.07);
   const bannerHeight = Math.round(qrSize * 0.2);
@@ -103,18 +96,16 @@ function buildRibbonFrame(
   const cardRadius = Math.round(qrSize * 0.06);
   const bannerY = pad + qrSize + Math.round(pad * 0.4);
   const fontSize = Math.max(14, Math.round(bannerHeight * 0.42));
-  const cardFill = backgroundFill?.fillRef ?? "#FFFFFF";
 
   // リボンの帯自体がこのテンプレートの主役の装飾なので、テキストをオフにしても
   // 帯の形は残し、中の文字だけを消す(空のリボン帯として成立する)。
   // 帯の左右の先端は矢羽根状にカットするだけにとどめ、以前あった
   // 帯から浮いて見える別パーツの「しっぽ」三角形は描かない。
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <defs>${backgroundFill?.defs ?? ""}</defs>
-  <rect x="0" y="0" width="${width}" height="${pad * 2 + qrSize}" rx="${cardRadius}" fill="${cardFill}"/>
+  <rect x="0" y="0" width="${width}" height="${pad * 2 + qrSize}" rx="${cardRadius}" fill="#FFFFFF"/>
   <image href="${qrDataUrl}" x="${pad}" y="${pad}" width="${qrSize}" height="${qrSize}"/>
   <polygon points="${width * 0.14},${bannerY} ${width * 0.86},${bannerY} ${width * 0.94},${bannerY + bannerHeight / 2} ${width * 0.86},${bannerY + bannerHeight} ${width * 0.14},${bannerY + bannerHeight} ${width * 0.06},${bannerY + bannerHeight / 2}" fill="${accentColor}"/>
-  ${textEnabled ? `<text x="${width / 2}" y="${bannerY + bannerHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Hiragino Sans', sans-serif" font-size="${fontSize}" font-weight="700" fill="#FFFFFF">${escapeXml(text)}</text>` : ""}
+  ${textEnabled ? `<text x="${width / 2}" y="${bannerY + bannerHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="${fontFamily}" font-size="${fontSize}" font-weight="700" fill="#FFFFFF">${escapeXml(text)}</text>` : ""}
 </svg>`;
 
   return { svg, width, height };
@@ -126,7 +117,7 @@ function buildSpeechFrame(
   text: string,
   textEnabled: boolean,
   accentColor: string,
-  backgroundFill: FrameBackgroundFill | null,
+  fontFamily: string,
 ): FramedSvgResult {
   const pad = Math.round(qrSize * 0.09);
   const tailHeight = Math.round(qrSize * 0.08);
@@ -142,7 +133,7 @@ function buildSpeechFrame(
   const bubbleTop = textEnabled ? labelHeight + labelGap : 0;
   const height = bubbleTop + bubbleHeight + tailHeight;
   const fontSize = Math.max(12, Math.round(labelHeight * 0.5));
-  const cardFill = backgroundFill?.fillRef ?? "#FFFFFF";
+  const cardFill = "#FFFFFF";
 
   const x0 = strokeWidth / 2;
   const x1 = width - strokeWidth / 2;
@@ -171,13 +162,12 @@ function buildSpeechFrame(
   // タグなので、テキストをオフにした場合はタグ自体を描画しない
   // (空の入れ物が浮いて見えるのを避けるため)。
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <defs>${backgroundFill?.defs ?? ""}</defs>
   <path d="${bubblePath}" fill="${cardFill}" stroke="${accentColor}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>
   <image href="${qrDataUrl}" x="${pad}" y="${bubbleTop + pad}" width="${qrSize}" height="${qrSize}"/>
   ${
     textEnabled
       ? `<rect x="${(width - labelWidth) / 2}" y="0" width="${labelWidth}" height="${labelHeight}" rx="${labelHeight / 2}" fill="${accentColor}"/>
-  <text x="${width / 2}" y="${labelHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Hiragino Sans', sans-serif" font-size="${fontSize}" font-weight="700" fill="#FFFFFF">${escapeXml(text)}</text>`
+  <text x="${width / 2}" y="${labelHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="${fontFamily}" font-size="${fontSize}" font-weight="700" fill="#FFFFFF">${escapeXml(text)}</text>`
       : ""
   }
 </svg>`;
@@ -198,7 +188,7 @@ function buildBadgeFrame(
   text: string,
   textEnabled: boolean,
   accentColor: string,
-  backgroundFill: FrameBackgroundFill | null,
+  fontFamily: string,
 ): FramedSvgResult {
   const pad = Math.round(qrSize * 0.1);
   const bodySide = qrSize + pad * 2;
@@ -211,7 +201,6 @@ function buildBadgeFrame(
   const width = bodySide + outerMargin;
   const height = bodySide + outerMargin + captionGap + captionHeight;
   const fontSize = Math.max(12, Math.round(captionHeight * 0.55));
-  const cardFill = backgroundFill?.fillRef ?? "#FFFFFF";
   const bx = bodySide;
   const by = bodySide;
 
@@ -219,15 +208,14 @@ function buildBadgeFrame(
   const checkPath = `M ${bx - badgeRadius * 0.45} ${by} L ${bx - badgeRadius * 0.1} ${by + badgeRadius * 0.35} L ${bx + badgeRadius * 0.5} ${by - badgeRadius * 0.35}`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <defs>${backgroundFill?.defs ?? ""}</defs>
-  <rect x="0" y="0" width="${bodySide}" height="${bodySide}" rx="${cardRadius}" fill="${cardFill}"/>
+  <rect x="0" y="0" width="${bodySide}" height="${bodySide}" rx="${cardRadius}" fill="#FFFFFF"/>
   <image href="${qrDataUrl}" x="${pad}" y="${pad}" width="${qrSize}" height="${qrSize}"/>
   <circle cx="${bx}" cy="${by}" r="${badgeRadius}" fill="#FFFFFF"/>
   <circle cx="${bx}" cy="${by}" r="${badgeRadius - badgeRingWidth}" fill="${accentColor}"/>
   <path d="${checkPath}" fill="none" stroke="#FFFFFF" stroke-width="${checkStroke}" stroke-linecap="round" stroke-linejoin="round"/>
   ${
     textEnabled
-      ? `<text x="${bodySide / 2}" y="${bodySide + outerMargin + captionGap + captionHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Hiragino Sans', sans-serif" font-size="${fontSize}" font-weight="700" fill="${accentColor}">${escapeXml(text)}</text>`
+      ? `<text x="${bodySide / 2}" y="${bodySide + outerMargin + captionGap + captionHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="${fontFamily}" font-size="${fontSize}" font-weight="700" fill="${accentColor}">${escapeXml(text)}</text>`
       : ""
   }
 </svg>`;
@@ -247,7 +235,7 @@ function buildStampFrame(
   text: string,
   textEnabled: boolean,
   accentColor: string,
-  backgroundFill: FrameBackgroundFill | null,
+  fontFamily: string,
 ): FramedSvgResult {
   const pad = Math.round(qrSize * 0.13);
   const bodySide = qrSize + pad * 2;
@@ -255,7 +243,7 @@ function buildStampFrame(
   const perfSpacing = perfRadius * 2.1;
   const ringWidth = Math.round(qrSize * 0.022);
   const fontSize = Math.max(10, Math.round(pad * 0.4));
-  const cardFill = backgroundFill?.fillRef ?? "#FFFFFF";
+  const cardFill = "#FFFFFF";
   const clipId = nextMaskId("stamp-clip");
 
   // 四辺それぞれの中点を円で「かじり取る」ことで、切手のミシン目(半円の
@@ -283,7 +271,6 @@ function buildStampFrame(
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${bodySide}" height="${bodySide}" viewBox="0 0 ${bodySide} ${bodySide}">
   <defs>
-    ${backgroundFill?.defs ?? ""}
     <clipPath id="${clipId}"><path d="${clipPathD}" clip-rule="evenodd"/></clipPath>
   </defs>
   <g clip-path="url(#${clipId})">
@@ -296,7 +283,7 @@ function buildStampFrame(
   <image href="${qrDataUrl}" x="${pad}" y="${pad}" width="${qrSize}" height="${qrSize}"/>
   ${
     textEnabled
-      ? `<text x="${bodySide / 2}" y="${bodySide - pad * 0.42}" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Hiragino Sans', sans-serif" font-size="${fontSize}" font-weight="700" fill="${accentColor}" paint-order="stroke" stroke="rgba(0,0,0,0.25)" stroke-width="${Math.max(1, Math.round(fontSize * 0.08))}">${escapeXml(text)}</text>`
+      ? `<text x="${bodySide / 2}" y="${bodySide - pad * 0.42}" text-anchor="middle" dominant-baseline="central" font-family="${fontFamily}" font-size="${fontSize}" font-weight="700" fill="${accentColor}" paint-order="stroke" stroke="rgba(0,0,0,0.25)" stroke-width="${Math.max(1, Math.round(fontSize * 0.08))}">${escapeXml(text)}</text>`
       : ""
   }
 </svg>`;
@@ -316,7 +303,7 @@ function buildPinFrame(
   text: string,
   textEnabled: boolean,
   accentColor: string,
-  backgroundFill: FrameBackgroundFill | null,
+  fontFamily: string,
 ): FramedSvgResult {
   const pad = Math.round(qrSize * 0.09);
   const strokeWidth = Math.max(3, Math.round(qrSize * 0.014));
@@ -329,7 +316,7 @@ function buildPinFrame(
   const width = bodySide;
   const height = bodySide + pointerHeight + captionGap + captionHeight;
   const fontSize = Math.max(12, Math.round(captionHeight * 0.55));
-  const cardFill = backgroundFill?.fillRef ?? "#FFFFFF";
+  const cardFill = "#FFFFFF";
   const cx = width / 2;
   const r = cardRadius;
   const x0 = strokeWidth / 2;
@@ -354,12 +341,11 @@ function buildPinFrame(
     Z`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <defs>${backgroundFill?.defs ?? ""}</defs>
   <path d="${pinPath}" fill="${cardFill}" stroke="${accentColor}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>
   <image href="${qrDataUrl}" x="${pad}" y="${pad}" width="${qrSize}" height="${qrSize}"/>
   ${
     textEnabled
-      ? `<text x="${cx}" y="${bodySide + pointerHeight + captionGap + captionHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Hiragino Sans', sans-serif" font-size="${fontSize}" font-weight="700" fill="${accentColor}">${escapeXml(text)}</text>`
+      ? `<text x="${cx}" y="${bodySide + pointerHeight + captionGap + captionHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="${fontFamily}" font-size="${fontSize}" font-weight="700" fill="${accentColor}">${escapeXml(text)}</text>`
       : ""
   }
 </svg>`;
@@ -369,8 +355,7 @@ function buildPinFrame(
 
 /**
  * カード面を持たない、四隅の"L字"ブラケットのみのミニマルなフレーム
- * (カメラのビューファインダーのような見た目)。土台となる面が存在しないため、
- * 背景パターンとの併用はできない(組み合わせても背景が乗る面がない)。
+ * (カメラのビューファインダーのような見た目)。
  */
 function buildCornerFrame(
   qrDataUrl: string,
@@ -378,6 +363,7 @@ function buildCornerFrame(
   text: string,
   textEnabled: boolean,
   accentColor: string,
+  fontFamily: string,
 ): FramedSvgResult {
   const gap = Math.round(qrSize * 0.06);
   const bracketLen = Math.round(qrSize * 0.16);
@@ -412,7 +398,7 @@ function buildCornerFrame(
   <image href="${qrDataUrl}" x="${pad}" y="${pad}" width="${qrSize}" height="${qrSize}"/>
   ${
     textEnabled
-      ? `<text x="${width / 2}" y="${bottom + captionGap + captionHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Hiragino Sans', sans-serif" font-size="${fontSize}" font-weight="700" fill="${accentColor}">${escapeXml(text)}</text>`
+      ? `<text x="${width / 2}" y="${bottom + captionGap + captionHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="${fontFamily}" font-size="${fontSize}" font-weight="700" fill="${accentColor}">${escapeXml(text)}</text>`
       : ""
   }
 </svg>`;
@@ -430,7 +416,7 @@ function buildTicketFrame(
   text: string,
   textEnabled: boolean,
   accentColor: string,
-  backgroundFill: FrameBackgroundFill | null,
+  fontFamily: string,
 ): FramedSvgResult {
   const pad = Math.round(qrSize * 0.08);
   const mainHeight = qrSize + pad * 2;
@@ -442,12 +428,11 @@ function buildTicketFrame(
   const notchRadius = Math.round(mainHeight * 0.09);
   const seamX = mainWidth;
   const fontSize = Math.max(12, Math.round(stubWidth * 0.26));
-  const cardFill = backgroundFill?.fillRef ?? "#FFFFFF";
+  const cardFill = "#FFFFFF";
   const maskId = nextMaskId("ticket-mask");
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <defs>
-    ${backgroundFill?.defs ?? ""}
     <mask id="${maskId}">
       <rect x="0" y="0" width="${width}" height="${height}" rx="${cardRadius}" fill="#FFFFFF"/>
       <circle cx="${seamX}" cy="0" r="${notchRadius}" fill="#000000"/>
@@ -462,7 +447,7 @@ function buildTicketFrame(
   <image href="${qrDataUrl}" x="${pad}" y="${pad}" width="${qrSize}" height="${qrSize}"/>
   ${
     textEnabled
-      ? `<text x="${mainWidth + stubWidth / 2}" y="${height / 2}" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Hiragino Sans', sans-serif" font-size="${fontSize}" font-weight="700" fill="${accentColor}" transform="rotate(-90 ${mainWidth + stubWidth / 2} ${height / 2})">${escapeXml(text)}</text>`
+      ? `<text x="${mainWidth + stubWidth / 2}" y="${height / 2}" text-anchor="middle" dominant-baseline="central" font-family="${fontFamily}" font-size="${fontSize}" font-weight="700" fill="${accentColor}" transform="rotate(-90 ${mainWidth + stubWidth / 2} ${height / 2})">${escapeXml(text)}</text>`
       : ""
   }
 </svg>`;
@@ -481,7 +466,7 @@ function buildTagFrame(
   text: string,
   textEnabled: boolean,
   accentColor: string,
-  backgroundFill: FrameBackgroundFill | null,
+  fontFamily: string,
 ): FramedSvgResult {
   const pad = Math.round(qrSize * 0.08);
   const bodyWidth = qrSize + pad * 2;
@@ -491,7 +476,7 @@ function buildTagFrame(
   const captionHeight = textEnabled ? Math.round(qrSize * 0.14) : 0;
   const cardRadius = Math.round(qrSize * 0.05);
   const fontSize = Math.max(12, Math.round(captionHeight * 0.5));
-  const cardFill = backgroundFill?.fillRef ?? "#FFFFFF";
+  const cardFill = "#FFFFFF";
   const maskId = nextMaskId("tag-mask");
 
   const width = bodyWidth;
@@ -508,7 +493,6 @@ function buildTagFrame(
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <defs>
-    ${backgroundFill?.defs ?? ""}
     <mask id="${maskId}">
       <rect x="0" y="0" width="${width}" height="${height}" fill="#000000"/>
       <path d="${flapPath}" fill="#FFFFFF"/>
@@ -526,7 +510,7 @@ function buildTagFrame(
   ${
     textEnabled
       ? `<rect x="0" y="${bodyTop + pad * 2 + qrSize}" width="${width}" height="${captionHeight}" fill="${accentColor}"/>
-  <text x="${width / 2}" y="${bodyTop + pad * 2 + qrSize + captionHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Hiragino Sans', sans-serif" font-size="${fontSize}" font-weight="700" fill="#FFFFFF">${escapeXml(text)}</text>`
+  <text x="${width / 2}" y="${bodyTop + pad * 2 + qrSize + captionHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="${fontFamily}" font-size="${fontSize}" font-weight="700" fill="#FFFFFF">${escapeXml(text)}</text>`
       : ""
   }
 </svg>`;
@@ -545,22 +529,21 @@ function buildPolaroidFrame(
   text: string,
   textEnabled: boolean,
   accentColor: string,
-  backgroundFill: FrameBackgroundFill | null,
+  fontFamily: string,
 ): FramedSvgResult {
   const thinBorder = Math.round(qrSize * 0.05);
   const bottomStrip = Math.round(qrSize * 0.22);
   const width = qrSize + thinBorder * 2;
   const height = thinBorder + qrSize + bottomStrip;
   const fontSize = Math.max(13, Math.round(bottomStrip * 0.26));
-  const cardFill = backgroundFill?.fillRef ?? "#FFFFFF";
+  const cardFill = "#FFFFFF";
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <defs>${backgroundFill?.defs ?? ""}</defs>
   <rect x="0" y="0" width="${width}" height="${height}" fill="${cardFill}" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
   <image href="${qrDataUrl}" x="${thinBorder}" y="${thinBorder}" width="${qrSize}" height="${qrSize}"/>
   ${
     textEnabled
-      ? `<text x="${width / 2}" y="${thinBorder + qrSize + bottomStrip / 2}" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Hiragino Sans', sans-serif" font-style="italic" font-size="${fontSize}" font-weight="600" fill="${accentColor}">${escapeXml(text)}</text>`
+      ? `<text x="${width / 2}" y="${thinBorder + qrSize + bottomStrip / 2}" text-anchor="middle" dominant-baseline="central" font-family="${fontFamily}" font-style="italic" font-size="${fontSize}" font-weight="600" fill="${accentColor}">${escapeXml(text)}</text>`
       : ""
   }
 </svg>`;
