@@ -1,11 +1,10 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useId } from "react";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Slider } from "@/components/ui/Slider";
 import { SwatchPicker } from "@/components/ui/SwatchPicker";
 import { FONT_OPTIONS } from "@/lib/qr/fonts";
-import { renderTextLogo } from "@/lib/qr/logoProcessing";
 import { MAX_TEXT_LOGO_LENGTH, TEXT_LOGO_MIN_HEIGHT_RATIO, TEXT_LOGO_MIN_FONT_SCALE } from "@/lib/qr/logoConstraints";
 import { SAFE_BACKGROUNDS, SAFE_COLORS } from "@/lib/qr/safeColors";
 import type { FontKey, LogoShape } from "@/types/qr";
@@ -27,99 +26,35 @@ export interface TextLogoDraft {
 }
 
 interface LogoTextComposerProps {
-  initial: TextLogoDraft;
-  /** 何か1項目でも変更されるたびに呼ばれる(即時反映)。 */
-  onChange: (draft: TextLogoDraft) => void;
-  /** 「キャンセル」。呼び出し側でこの編集セッション開始前の状態に戻す。 */
-  onCancel: () => void;
-  /** 「完了」。変更は既に反映済みのため、単に編集画面を閉じる。 */
-  onDone: () => void;
+  draft: TextLogoDraft;
+  /** 何か1項目でも変更されるたびに呼ばれる(即時反映)。形状・ロゴサイズは呼び出し側で共通管理する。 */
+  onChange: (patch: Partial<TextLogoDraft>) => void;
 }
 
-export function LogoTextComposer({ initial, onChange, onCancel, onDone }: LogoTextComposerProps) {
-  const [draft, setDraft] = useState<TextLogoDraft>(initial);
+// 形状(四角/丸)とロゴサイズは、画像ロゴと同じ場所(LogoUploader側)で
+// 一元的に扱うため、ここではテキスト固有の項目のみを編集する。
+// 変更は「適用」ボタンを待たず、その場で呼び出し側(実際のロゴ)へ即時反映する。
+export function LogoTextComposer({ draft, onChange }: LogoTextComposerProps) {
   const inputId = useId();
-  const trimmed = draft.text.trim();
-
-  // renderTextLogoはcanvas描画のみで完結する同期処理のため、入力のたびに
-  // その場でプレビューを再生成できる(画像ロゴのような非同期読み込みが不要)。
-  const previewDataUrl = useMemo(() => {
-    if (!trimmed) return null;
-    try {
-      return renderTextLogo({ ...draft, text: trimmed });
-    } catch {
-      return null;
-    }
-  }, [draft, trimmed]);
-
-  // 変更のたびにローカルの下書きを更新すると同時に、呼び出し側(実際のロゴ)へも
-  // 即座に反映する。「適用」ボタンを待たずに操作結果がQRプレビューへ出るようにするため。
-  const updateDraft = (patch: Partial<TextLogoDraft>) => {
-    setDraft((prev) => {
-      const next = { ...prev, ...patch };
-      onChange(next);
-      return next;
-    });
-  };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-black/[0.02] p-1">
-          {previewDataUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={previewDataUrl} alt="テキストロゴのプレビュー" className="h-full w-full object-contain" />
-          ) : (
-            <span className="text-xs text-ink/30">未入力</span>
-          )}
-        </div>
-        <div className="flex-1">
-          <label htmlFor={inputId} className="mb-2 block text-sm font-medium text-ink/80">
-            ロゴのテキスト
-          </label>
-          <textarea
-            id={inputId}
-            value={draft.text}
-            maxLength={MAX_TEXT_LOGO_LENGTH}
-            onChange={(event) => updateDraft({ text: event.target.value })}
-            placeholder={"例: SALE\n(Enterで改行できます)"}
-            rows={2}
-            className="w-full resize-none rounded-xl border border-black/10 px-3 py-2 text-sm outline-none focus:border-accent"
-          />
-          <p className="mt-1 text-xs text-ink/40">
-            {draft.text.length}/{MAX_TEXT_LOGO_LENGTH}文字・Enterで改行・幅と高さに収まる最大サイズで自動調整します
-          </p>
-        </div>
-      </div>
-
       <div>
-        <p className="mb-2 text-sm font-medium text-ink/80">形状</p>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => updateDraft({ shape: "square" })}
-            aria-pressed={draft.shape === "square"}
-            className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
-              draft.shape === "square"
-                ? "border-accent bg-accent/10 text-accent"
-                : "border-black/10 text-ink/60 hover:border-black/20"
-            }`}
-          >
-            四角
-          </button>
-          <button
-            type="button"
-            onClick={() => updateDraft({ shape: "circle" })}
-            aria-pressed={draft.shape === "circle"}
-            className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
-              draft.shape === "circle"
-                ? "border-accent bg-accent/10 text-accent"
-                : "border-black/10 text-ink/60 hover:border-black/20"
-            }`}
-          >
-            丸
-          </button>
-        </div>
+        <label htmlFor={inputId} className="mb-2 block text-sm font-medium text-ink/80">
+          ロゴのテキスト
+        </label>
+        <textarea
+          id={inputId}
+          value={draft.text}
+          maxLength={MAX_TEXT_LOGO_LENGTH}
+          onChange={(event) => onChange({ text: event.target.value })}
+          placeholder={"例: SALE\n(Enterで改行できます)"}
+          rows={2}
+          className="w-full resize-none rounded-xl border border-black/10 px-3 py-2 text-sm outline-none focus:border-accent"
+        />
+        <p className="mt-1 text-xs text-ink/40">
+          {draft.text.length}/{MAX_TEXT_LOGO_LENGTH}文字・Enterで改行・幅と高さに収まる最大サイズで自動調整します
+        </p>
       </div>
 
       <div className="space-y-4">
@@ -131,7 +66,7 @@ export function LogoTextComposer({ initial, onChange, onCancel, onDone }: LogoTe
             max={1}
             step={0.05}
             value={draft.heightRatio}
-            onChange={(heightRatio) => updateDraft({ heightRatio })}
+            onChange={(heightRatio) => onChange({ heightRatio })}
             formatValue={(v) => `${Math.round(v * 100)}%`}
           />
         )}
@@ -142,7 +77,7 @@ export function LogoTextComposer({ initial, onChange, onCancel, onDone }: LogoTe
           max={1}
           step={0.05}
           value={draft.fontScale}
-          onChange={(fontScale) => updateDraft({ fontScale })}
+          onChange={(fontScale) => onChange({ fontScale })}
           formatValue={(v) => `${Math.round(v * 100)}%`}
         />
       </div>
@@ -153,7 +88,7 @@ export function LogoTextComposer({ initial, onChange, onCancel, onDone }: LogoTe
           ariaLabel="フォント"
           options={FONT_OPTIONS}
           value={draft.fontKey}
-          onChange={(fontKey) => updateDraft({ fontKey })}
+          onChange={(fontKey) => onChange({ fontKey })}
         />
       </div>
 
@@ -162,7 +97,7 @@ export function LogoTextComposer({ initial, onChange, onCancel, onDone }: LogoTe
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => updateDraft({ bold: !draft.bold })}
+            onClick={() => onChange({ bold: !draft.bold })}
             aria-pressed={draft.bold}
             className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
               draft.bold
@@ -174,7 +109,7 @@ export function LogoTextComposer({ initial, onChange, onCancel, onDone }: LogoTe
           </button>
           <button
             type="button"
-            onClick={() => updateDraft({ italic: !draft.italic })}
+            onClick={() => onChange({ italic: !draft.italic })}
             aria-pressed={draft.italic}
             className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium italic transition-colors ${
               draft.italic
@@ -186,7 +121,7 @@ export function LogoTextComposer({ initial, onChange, onCancel, onDone }: LogoTe
           </button>
           <button
             type="button"
-            onClick={() => updateDraft({ outlineOnly: !draft.outlineOnly })}
+            onClick={() => onChange({ outlineOnly: !draft.outlineOnly })}
             aria-pressed={draft.outlineOnly}
             className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
               draft.outlineOnly
@@ -207,7 +142,7 @@ export function LogoTextComposer({ initial, onChange, onCancel, onDone }: LogoTe
           value={SAFE_BACKGROUNDS.find((c) => c.color === draft.fillColor)?.key ?? SAFE_BACKGROUNDS[0]!.key}
           onChange={(key) => {
             const found = SAFE_BACKGROUNDS.find((c) => c.key === key);
-            if (found) updateDraft({ fillColor: found.color });
+            if (found) onChange({ fillColor: found.color });
           }}
           options={SAFE_BACKGROUNDS.map((c) => ({ key: c.key, label: c.label, swatchCss: c.color }))}
         />
@@ -223,27 +158,10 @@ export function LogoTextComposer({ initial, onChange, onCancel, onDone }: LogoTe
           value={SAFE_COLORS.find((c) => c.color === draft.textColor)?.key ?? SAFE_COLORS[0]!.key}
           onChange={(key) => {
             const found = SAFE_COLORS.find((c) => c.key === key);
-            if (found) updateDraft({ textColor: found.color });
+            if (found) onChange({ textColor: found.color });
           }}
           options={SAFE_COLORS.map((c) => ({ key: c.key, label: c.label, swatchCss: c.color }))}
         />
-      </div>
-
-      <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="min-h-11 rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium text-ink/60 hover:border-black/20"
-        >
-          キャンセル
-        </button>
-        <button
-          type="button"
-          onClick={onDone}
-          className="min-h-11 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white"
-        >
-          完了
-        </button>
       </div>
     </div>
   );

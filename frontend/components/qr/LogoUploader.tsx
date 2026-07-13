@@ -47,22 +47,12 @@ interface PendingUpload {
   initialCrop?: CropRect;
 }
 
-// ロゴの「元になった情報」。形状(四角/丸)を切り替えたり再編集したりするたびに
-// ここから再生成する(logo.dataUrlは既に加工・描画済みのため再利用できない)。
-type LogoSource =
-  | { type: "image"; sourceDataUrl: string; crop: CropRect }
-  | {
-      type: "text";
-      text: string;
-      fontKey: TextLogoDraft["fontKey"];
-      fillColor: string;
-      textColor: string;
-      heightRatio: number;
-      bold: boolean;
-      italic: boolean;
-      outlineOnly: boolean;
-      fontScale: number;
-    };
+// アップロードされた元画像。「切り抜き形状」の再編集時に、ここから再度
+// 切り抜きをやり直す(logo.dataUrlは既に加工・描画済みのため再利用できない)。
+interface ImageSource {
+  sourceDataUrl: string;
+  crop: CropRect;
+}
 
 async function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -73,18 +63,58 @@ async function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+function ShapeButtons({
+  shape,
+  onSelect,
+  extra,
+}: {
+  shape: LogoShape;
+  onSelect: (shape: LogoShape) => void;
+  extra?: React.ReactNode;
+}) {
+  return (
+    <div>
+      <span className="mb-2 block text-sm font-medium text-ink/80">形状</span>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => onSelect("square")}
+          aria-pressed={shape === "square"}
+          className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+            shape === "square"
+              ? "border-accent bg-accent/10 text-accent"
+              : "border-black/10 text-ink/60 hover:border-black/20"
+          }`}
+        >
+          四角
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelect("circle")}
+          aria-pressed={shape === "circle"}
+          className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+            shape === "circle"
+              ? "border-accent bg-accent/10 text-accent"
+              : "border-black/10 text-ink/60 hover:border-black/20"
+          }`}
+        >
+          丸
+        </button>
+        {extra}
+      </div>
+    </div>
+  );
+}
+
 export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectionChange }: LogoUploaderProps) {
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
-  const [pendingText, setPendingText] = useState<TextLogoDraft | null>(null);
-  const [logoSource, setLogoSource] = useState<LogoSource | null>(null);
-  // テキストロゴの編集セッションを開始する直前の状態。「キャンセル」時に
-  // ここへ戻す(編集中は即時反映するため、それ以外に取り消す手段が無いため)。
-  const [textEditSnapshot, setTextEditSnapshot] = useState<{
-    logo: LogoConfig | null;
-    logoSource: LogoSource | null;
-  } | null>(null);
+  // テキストロゴを作成・編集している間、常に非nullになる(確定前の下書き段階も含む)。
+  // 形状・ロゴサイズは画像ロゴと同じ場所で一元管理し、テキスト固有の項目のみを
+  // ここで保持する。「適用」ボタンは無く、変更のたびに即座に実際のロゴへ反映する。
+  const [textDraft, setTextDraft] = useState<TextLogoDraft | null>(null);
+  const [imageSource, setImageSource] = useState<ImageSource | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const inputId = useId();
 
@@ -131,7 +161,7 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
     setIsProcessing(true);
     try {
       const dataUrl = await processLogoImage(sourceDataUrl, shape, crop);
-      setLogoSource({ type: "image", sourceDataUrl, crop });
+      setImageSource({ sourceDataUrl, crop });
       onChange({ dataUrl, sizeRatio: logo?.sizeRatio ?? DEFAULT_SIZE_RATIO, fileName, shape });
       if (isFirstLogo) promoteToBestErrorCorrection();
     } catch {
@@ -144,129 +174,67 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
 
   const handleCropCancel = () => setPendingUpload(null);
 
-  // テキストロゴは「適用」ボタンを待たず、1項目変更するたびに実際のロゴへ
-  // 即時反映する(キー入力やボタン操作の結果がすぐQRプレビューに出るようにするため)。
-  const handleTextChange = (draft: TextLogoDraft) => {
-    const trimmed = draft.text.trim();
-    if (!trimmed) return;
-    const isFirstLogo = !logo;
-    try {
-      const dataUrl = renderTextLogo({ ...draft, text: trimmed });
-      setLogoSource({
-        type: "text",
-        text: trimmed,
-        fontKey: draft.fontKey,
-        fillColor: draft.fillColor,
-        textColor: draft.textColor,
-        heightRatio: draft.heightRatio,
-        bold: draft.bold,
-        italic: draft.italic,
-        outlineOnly: draft.outlineOnly,
-        fontScale: draft.fontScale,
-      });
-      onChange({
-        dataUrl,
-        sizeRatio: logo?.sizeRatio ?? DEFAULT_SIZE_RATIO,
-        fileName: trimmed,
-        shape: draft.shape,
-      });
-      if (isFirstLogo) promoteToBestErrorCorrection();
-    } catch {
-      setError("テキストロゴの作成に失敗しました。");
+  // テキストロゴの下書きを更新し、テキストが入力されていれば即座に実際のロゴへ
+  // 反映する(「適用」ボタンを待たず、キー入力やボタン操作の結果がすぐQRプレビューに出るようにするため)。
+  // 親のonChangeはsetTextDraftの更新関数の外で呼ぶ(別コンポーネントの状態更新を
+  // レンダー中に行うとReactの警告になるため)。
+  const handleTextDraftChange = (patch: Partial<TextLogoDraft>) => {
+    if (!textDraft) return;
+    const next = { ...textDraft, ...patch };
+    setTextDraft(next);
+    const trimmed = next.text.trim();
+    if (trimmed) {
+      const isFirstLogo = !logo;
+      try {
+        const dataUrl = renderTextLogo({ ...next, text: trimmed });
+        onChange({
+          dataUrl,
+          sizeRatio: logo?.sizeRatio ?? DEFAULT_SIZE_RATIO,
+          fileName: trimmed,
+          shape: next.shape,
+        });
+        if (isFirstLogo) promoteToBestErrorCorrection();
+      } catch {
+        setError("テキストロゴの作成に失敗しました。");
+      }
     }
-  };
-
-  const handleTextCancel = () => {
-    if (textEditSnapshot) {
-      onChange(textEditSnapshot.logo);
-      setLogoSource(textEditSnapshot.logoSource);
-    }
-    setPendingText(null);
-    setTextEditSnapshot(null);
-  };
-
-  const handleTextDone = () => {
-    setPendingText(null);
-    setTextEditSnapshot(null);
   };
 
   const handleStartTextLogo = () => {
     setError(null);
-    setTextEditSnapshot({ logo, logoSource });
-    setPendingText(
-      logoSource?.type === "text"
-        ? {
-            text: logoSource.text,
-            fontKey: logoSource.fontKey,
-            fillColor: logoSource.fillColor,
-            textColor: logoSource.textColor,
-            shape: logo?.shape ?? DEFAULT_SHAPE,
-            heightRatio: logoSource.heightRatio,
-            bold: logoSource.bold,
-            italic: logoSource.italic,
-            outlineOnly: logoSource.outlineOnly,
-            fontScale: logoSource.fontScale,
-          }
-        : DEFAULT_TEXT_DRAFT,
-    );
+    setTextDraft(DEFAULT_TEXT_DRAFT);
   };
 
-  const handleEdit = () => {
+  const handleCancelTextLogo = () => setTextDraft(null);
+
+  const handleDelete = () => {
+    setImageSource(null);
+    setTextDraft(null);
+    onChange(null);
+  };
+
+  const handleEditCrop = () => {
     if (!logo) return;
-    if (logoSource?.type === "text") {
-      setTextEditSnapshot({ logo, logoSource });
-      setPendingText({
-        text: logoSource.text,
-        fontKey: logoSource.fontKey,
-        fillColor: logoSource.fillColor,
-        textColor: logoSource.textColor,
-        shape: logo.shape,
-        heightRatio: logoSource.heightRatio,
-        bold: logoSource.bold,
-        italic: logoSource.italic,
-        outlineOnly: logoSource.outlineOnly,
-        fontScale: logoSource.fontScale,
-      });
-      return;
-    }
-    if (logoSource?.type === "image") {
-      setPendingUpload({ sourceDataUrl: logoSource.sourceDataUrl, fileName: logo.fileName, initialCrop: logoSource.crop });
+    if (imageSource) {
+      setPendingUpload({ sourceDataUrl: imageSource.sourceDataUrl, fileName: logo.fileName, initialCrop: imageSource.crop });
     } else {
       // 元情報を保持していない場合(再訪時など)は、現在の加工済み画像を対象にする。
       setPendingUpload({ sourceDataUrl: logo.dataUrl, fileName: logo.fileName });
     }
   };
 
-  const handleShapeChange = async (shape: LogoShape) => {
-    if (!logo || shape === logo.shape) return;
-
-    if (logoSource?.type === "text") {
-      try {
-        const dataUrl = renderTextLogo({
-          text: logoSource.text,
-          fontKey: logoSource.fontKey,
-          fillColor: logoSource.fillColor,
-          textColor: logoSource.textColor,
-          heightRatio: logoSource.heightRatio,
-          bold: logoSource.bold,
-          italic: logoSource.italic,
-          outlineOnly: logoSource.outlineOnly,
-          fontScale: logoSource.fontScale,
-          shape,
-        });
-        onChange({ ...logo, dataUrl, shape });
-      } catch {
-        setError("テキストロゴの作成に失敗しました。");
-      }
+  const handleShapeSelect = async (shape: LogoShape) => {
+    if (textDraft) {
+      handleTextDraftChange({ shape });
       return;
     }
+    if (!logo || shape === logo.shape) return;
 
     setIsProcessing(true);
     try {
-      const dataUrl =
-        logoSource?.type === "image"
-          ? await processLogoImage(logoSource.sourceDataUrl, shape, logoSource.crop)
-          : await processLogoImage(logo.dataUrl, shape);
+      const dataUrl = imageSource
+        ? await processLogoImage(imageSource.sourceDataUrl, shape, imageSource.crop)
+        : await processLogoImage(logo.dataUrl, shape);
       onChange({ ...logo, dataUrl, shape });
     } catch {
       setError("画像の処理に失敗しました。");
@@ -293,17 +261,6 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
     );
   }
 
-  if (pendingText) {
-    return (
-      <LogoTextComposer
-        initial={pendingText}
-        onChange={handleTextChange}
-        onCancel={handleTextCancel}
-        onDone={handleTextDone}
-      />
-    );
-  }
-
   return (
     <div>
       {logo ? (
@@ -326,54 +283,32 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
             </div>
             <button
               type="button"
-              onClick={() => {
-                setLogoSource(null);
-                onChange(null);
-              }}
+              onClick={handleDelete}
               className="ml-auto min-h-11 shrink-0 rounded-lg px-3 text-sm font-medium text-red-500 hover:bg-red-50"
             >
               削除
             </button>
           </div>
-          <div>
-            <span className="mb-2 block text-sm font-medium text-ink/80">切り抜き形状</span>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={isProcessing}
-                onClick={() => void handleShapeChange("square")}
-                aria-pressed={logo.shape === "square"}
-                className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
-                  logo.shape === "square"
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "border-black/10 text-ink/60 hover:border-black/20"
-                }`}
-              >
-                四角
-              </button>
-              <button
-                type="button"
-                disabled={isProcessing}
-                onClick={() => void handleShapeChange("circle")}
-                aria-pressed={logo.shape === "circle"}
-                className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
-                  logo.shape === "circle"
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "border-black/10 text-ink/60 hover:border-black/20"
-                }`}
-              >
-                丸
-              </button>
-              <button
-                type="button"
-                disabled={isProcessing}
-                onClick={handleEdit}
-                className="min-h-11 rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium text-ink/60 hover:border-black/20 disabled:opacity-50"
-              >
-                {logoSource?.type === "text" ? "テキストを編集" : "トリミングを編集"}
-              </button>
-            </div>
-          </div>
+
+          <ShapeButtons
+            shape={logo.shape}
+            onSelect={(shape) => void handleShapeSelect(shape)}
+            extra={
+              !textDraft && (
+                <button
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={handleEditCrop}
+                  className="min-h-11 rounded-lg border border-black/10 px-4 py-2.5 text-sm font-medium text-ink/60 hover:border-black/20 disabled:opacity-50"
+                >
+                  トリミングを編集
+                </button>
+              )
+            }
+          />
+
+          {textDraft && <LogoTextComposer draft={textDraft} onChange={handleTextDraftChange} />}
+
           <Slider
             id="logo-size"
             label="ロゴサイズ"
@@ -384,6 +319,23 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
             onChange={(sizeRatio) => onChange({ ...logo, sizeRatio })}
             formatValue={(v) => `${Math.round(v * 100)}%`}
           />
+        </div>
+      ) : textDraft ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-ink/80">テキストでロゴを作成</span>
+            <button
+              type="button"
+              onClick={handleCancelTextLogo}
+              className="min-h-11 rounded-lg px-3 text-sm font-medium text-ink/40 hover:text-ink/60"
+            >
+              やめる
+            </button>
+          </div>
+
+          <ShapeButtons shape={textDraft.shape} onSelect={(shape) => void handleShapeSelect(shape)} />
+
+          <LogoTextComposer draft={textDraft} onChange={handleTextDraftChange} />
         </div>
       ) : (
         <div>
