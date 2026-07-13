@@ -27,16 +27,17 @@ _EC_MAP = {
 # ロゴを載せる場合の、EC levelごとの安全な最大ロゴ幅比率（QR全体の幅に対する比率）。
 # 幅比率がそのまま面積比率になるわけではなく、正方形ロゴの被覆面積は
 # おおよそ(幅比率)^2で効いてくるため、実際の誤り訂正バジェット消費は見た目の
-# 比率よりかなり小さい（例: H levelで0.36なら面積は約13%、バジェットは30%
-# あるので余裕がある）。ただしEC levelが既にHかつ四隅がsquare形状の場合は
-# これ以上のエスカレーション手段が無いため、実際のデコード検証に失敗した
-# 場合の最終手段としてロゴ比率自体を縮小する補正を
-# correction_engine.build_corrections内に安全網として用意している。
+# 比率よりかなり小さい（例: H levelで0.45なら面積は約20%、バジェットは30%
+# あるので依然として余裕がある）。「読み取れる最大まで」を追求するため上限は
+# 積極的寄りに設定しているが、それでも実際のデコードに失敗した場合の
+# 最終手段としてロゴ比率自体を縮小する補正を
+# correction_engine.build_corrections内に安全網として用意している
+# (EC levelが既にHかつ四隅がsquare形状で、それでも読み取れない場合に発動)。
 _MAX_LOGO_RATIO = {
     ErrorCorrectionLevel.L: 0.0,
-    ErrorCorrectionLevel.M: 0.20,
-    ErrorCorrectionLevel.Q: 0.28,
-    ErrorCorrectionLevel.H: 0.36,
+    ErrorCorrectionLevel.M: 0.26,
+    ErrorCorrectionLevel.Q: 0.34,
+    ErrorCorrectionLevel.H: 0.45,
 }
 
 _MIN_QUIET_ZONE_MODULES = 4

@@ -5,9 +5,9 @@ import type { ErrorCorrectionLevel } from "@/types/qr";
 // Lはロゴとの併用を想定していない(誤り訂正の余力がほぼ無いため)。
 export const MAX_LOGO_RATIO_BY_EC: Record<ErrorCorrectionLevel, number> = {
   L: 0,
-  M: 0.2,
-  Q: 0.28,
-  H: 0.36,
+  M: 0.26,
+  Q: 0.34,
+  H: 0.45,
 };
 
 export const LOGO_SIZE_MIN_RATIO = 0.1;

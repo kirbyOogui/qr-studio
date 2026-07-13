@@ -93,6 +93,10 @@ export interface TextLogoOptions {
    * (楕円にはしない)。
    */
   heightRatio: number;
+  bold: boolean;
+  italic: boolean;
+  /** trueの場合、文字を塗りつぶさず輪郭線のみで描く(縁取り文字)。 */
+  outlineOnly: boolean;
 }
 
 // 文字数に関わらず一定の解像度で描く(ベクター的なテキスト描画のため、
@@ -107,7 +111,17 @@ const TEXT_LOGO_LINE_HEIGHT_RATIO = 1.2;
  * 最大値までcanvasの実測(measureText)で段階的に縮小して求めるため、
  * 行数や1行の長さが変わっても背景からはみ出さず、かつ可能な限り大きく描かれる。
  */
-export function renderTextLogo({ text, fontKey, fillColor, textColor, shape, heightRatio }: TextLogoOptions): string {
+export function renderTextLogo({
+  text,
+  fontKey,
+  fillColor,
+  textColor,
+  shape,
+  heightRatio,
+  bold,
+  italic,
+  outlineOnly,
+}: TextLogoOptions): string {
   const width = TEXT_LOGO_WIDTH;
   const height =
     shape === "circle" ? width : Math.round(width * Math.min(1, Math.max(TEXT_LOGO_MIN_HEIGHT_RATIO, heightRatio)));
@@ -135,6 +149,9 @@ export function renderTextLogo({ text, fontKey, fillColor, textColor, shape, hei
     const usableWidth = shape === "circle" ? width * 0.62 : width * 0.85;
     const usableHeight = shape === "circle" ? height * 0.62 : height * 0.82;
     const fontFamily = FONT_STACKS[fontKey];
+    const fontStyle = italic ? "italic " : "";
+    const fontWeight = bold ? "700" : "400";
+    const buildFont = (size: number) => `${fontStyle}${fontWeight} ${size}px ${fontFamily}`;
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -143,7 +160,7 @@ export function renderTextLogo({ text, fontKey, fillColor, textColor, shape, hei
     // キャンバスサイズそのものから開始する(恣意的な上限比率を設けない)。
     let fontSize = Math.max(width, height);
     while (fontSize > TEXT_LOGO_MIN_FONT_SIZE) {
-      ctx.font = `700 ${fontSize}px ${fontFamily}`;
+      ctx.font = buildFont(fontSize);
       const lineHeight = fontSize * TEXT_LOGO_LINE_HEIGHT_RATIO;
       const totalTextHeight = lineHeight * lines.length;
       const widestLine = Math.max(...lines.map((line) => ctx.measureText(line || " ").width));
@@ -151,14 +168,24 @@ export function renderTextLogo({ text, fontKey, fillColor, textColor, shape, hei
       fontSize -= 2;
     }
 
-    ctx.font = `700 ${fontSize}px ${fontFamily}`;
-    ctx.fillStyle = textColor;
+    ctx.font = buildFont(fontSize);
     const lineHeight = fontSize * TEXT_LOGO_LINE_HEIGHT_RATIO;
     const totalTextHeight = lineHeight * lines.length;
     const firstLineY = height / 2 - totalTextHeight / 2 + lineHeight / 2;
-    lines.forEach((line, index) => {
-      ctx.fillText(line, width / 2, firstLineY + index * lineHeight);
-    });
+
+    if (outlineOnly) {
+      ctx.strokeStyle = textColor;
+      ctx.lineWidth = Math.max(1, fontSize * 0.06);
+      ctx.lineJoin = "round";
+      lines.forEach((line, index) => {
+        ctx.strokeText(line, width / 2, firstLineY + index * lineHeight);
+      });
+    } else {
+      ctx.fillStyle = textColor;
+      lines.forEach((line, index) => {
+        ctx.fillText(line, width / 2, firstLineY + index * lineHeight);
+      });
+    }
   }
 
   return canvas.toDataURL("image/png");

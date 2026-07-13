@@ -18,15 +18,23 @@ export interface TextLogoDraft {
   shape: LogoShape;
   /** 幅に対する高さの比率(TEXT_LOGO_MIN_HEIGHT_RATIO〜1)。丸形状では常に1として扱う。 */
   heightRatio: number;
+  bold: boolean;
+  italic: boolean;
+  /** trueの場合、文字を塗りつぶさず輪郭線のみで描く(縁取り文字)。 */
+  outlineOnly: boolean;
 }
 
 interface LogoTextComposerProps {
   initial: TextLogoDraft;
-  onConfirm: (draft: TextLogoDraft) => void;
+  /** 何か1項目でも変更されるたびに呼ばれる(即時反映)。 */
+  onChange: (draft: TextLogoDraft) => void;
+  /** 「キャンセル」。呼び出し側でこの編集セッション開始前の状態に戻す。 */
   onCancel: () => void;
+  /** 「完了」。変更は既に反映済みのため、単に編集画面を閉じる。 */
+  onDone: () => void;
 }
 
-export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextComposerProps) {
+export function LogoTextComposer({ initial, onChange, onCancel, onDone }: LogoTextComposerProps) {
   const [draft, setDraft] = useState<TextLogoDraft>(initial);
   const inputId = useId();
   const trimmed = draft.text.trim();
@@ -41,6 +49,16 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
       return null;
     }
   }, [draft, trimmed]);
+
+  // 変更のたびにローカルの下書きを更新すると同時に、呼び出し側(実際のロゴ)へも
+  // 即座に反映する。「適用」ボタンを待たずに操作結果がQRプレビューへ出るようにするため。
+  const updateDraft = (patch: Partial<TextLogoDraft>) => {
+    setDraft((prev) => {
+      const next = { ...prev, ...patch };
+      onChange(next);
+      return next;
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -61,7 +79,7 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
             id={inputId}
             value={draft.text}
             maxLength={MAX_TEXT_LOGO_LENGTH}
-            onChange={(event) => setDraft((prev) => ({ ...prev, text: event.target.value }))}
+            onChange={(event) => updateDraft({ text: event.target.value })}
             placeholder={"例: SALE\n(Enterで改行できます)"}
             rows={2}
             className="w-full resize-none rounded-xl border border-black/10 px-3 py-2 text-sm outline-none focus:border-accent"
@@ -77,7 +95,7 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => setDraft((prev) => ({ ...prev, shape: "square" }))}
+            onClick={() => updateDraft({ shape: "square" })}
             aria-pressed={draft.shape === "square"}
             className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
               draft.shape === "square"
@@ -89,7 +107,7 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
           </button>
           <button
             type="button"
-            onClick={() => setDraft((prev) => ({ ...prev, shape: "circle" }))}
+            onClick={() => updateDraft({ shape: "circle" })}
             aria-pressed={draft.shape === "circle"}
             className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
               draft.shape === "circle"
@@ -110,7 +128,7 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
           max={1}
           step={0.05}
           value={draft.heightRatio}
-          onChange={(heightRatio) => setDraft((prev) => ({ ...prev, heightRatio }))}
+          onChange={(heightRatio) => updateDraft({ heightRatio })}
           formatValue={(v) => `${Math.round(v * 100)}%`}
         />
       )}
@@ -121,8 +139,50 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
           ariaLabel="フォント"
           options={FONT_OPTIONS}
           value={draft.fontKey}
-          onChange={(fontKey) => setDraft((prev) => ({ ...prev, fontKey }))}
+          onChange={(fontKey) => updateDraft({ fontKey })}
         />
+      </div>
+
+      <div>
+        <p className="mb-2 text-sm font-medium text-ink/80">文字スタイル</p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => updateDraft({ bold: !draft.bold })}
+            aria-pressed={draft.bold}
+            className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+              draft.bold
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-black/10 text-ink/60 hover:border-black/20"
+            }`}
+          >
+            太字
+          </button>
+          <button
+            type="button"
+            onClick={() => updateDraft({ italic: !draft.italic })}
+            aria-pressed={draft.italic}
+            className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium italic transition-colors ${
+              draft.italic
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-black/10 text-ink/60 hover:border-black/20"
+            }`}
+          >
+            斜体
+          </button>
+          <button
+            type="button"
+            onClick={() => updateDraft({ outlineOnly: !draft.outlineOnly })}
+            aria-pressed={draft.outlineOnly}
+            className={`min-h-11 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+              draft.outlineOnly
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-black/10 text-ink/60 hover:border-black/20"
+            }`}
+          >
+            縁のみ
+          </button>
+        </div>
       </div>
 
       <div>
@@ -133,21 +193,23 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
           value={SAFE_BACKGROUNDS.find((c) => c.color === draft.fillColor)?.key ?? SAFE_BACKGROUNDS[0]!.key}
           onChange={(key) => {
             const found = SAFE_BACKGROUNDS.find((c) => c.key === key);
-            if (found) setDraft((prev) => ({ ...prev, fillColor: found.color }));
+            if (found) updateDraft({ fillColor: found.color });
           }}
           options={SAFE_BACKGROUNDS.map((c) => ({ key: c.key, label: c.label, swatchCss: c.color }))}
         />
       </div>
 
       <div>
-        <p className="mb-2 text-sm font-medium text-ink/80">文字色</p>
+        <p className="mb-2 text-sm font-medium text-ink/80">
+          {draft.outlineOnly ? "文字色(縁の色)" : "文字色"}
+        </p>
         <SwatchPicker
           ariaLabel="ロゴの文字色"
           columns={4}
           value={SAFE_COLORS.find((c) => c.color === draft.textColor)?.key ?? SAFE_COLORS[0]!.key}
           onChange={(key) => {
             const found = SAFE_COLORS.find((c) => c.key === key);
-            if (found) setDraft((prev) => ({ ...prev, textColor: found.color }));
+            if (found) updateDraft({ textColor: found.color });
           }}
           options={SAFE_COLORS.map((c) => ({ key: c.key, label: c.label, swatchCss: c.color }))}
         />
@@ -163,11 +225,10 @@ export function LogoTextComposer({ initial, onConfirm, onCancel }: LogoTextCompo
         </button>
         <button
           type="button"
-          disabled={!trimmed}
-          onClick={() => onConfirm({ ...draft, text: trimmed })}
-          className="min-h-11 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+          onClick={onDone}
+          className="min-h-11 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white"
         >
-          適用
+          完了
         </button>
       </div>
     </div>

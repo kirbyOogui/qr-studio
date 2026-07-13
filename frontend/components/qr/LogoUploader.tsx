@@ -34,6 +34,9 @@ const DEFAULT_TEXT_DRAFT: TextLogoDraft = {
   textColor: SAFE_COLORS[0]!.color,
   shape: DEFAULT_SHAPE,
   heightRatio: TEXT_LOGO_DEFAULT_HEIGHT_RATIO,
+  bold: true,
+  italic: false,
+  outlineOnly: false,
 };
 
 interface PendingUpload {
@@ -53,6 +56,9 @@ type LogoSource =
       fillColor: string;
       textColor: string;
       heightRatio: number;
+      bold: boolean;
+      italic: boolean;
+      outlineOnly: boolean;
     };
 
 async function readFileAsDataUrl(file: File): Promise<string> {
@@ -70,6 +76,12 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
   const [pendingText, setPendingText] = useState<TextLogoDraft | null>(null);
   const [logoSource, setLogoSource] = useState<LogoSource | null>(null);
+  // テキストロゴの編集セッションを開始する直前の状態。「キャンセル」時に
+  // ここへ戻す(編集中は即時反映するため、それ以外に取り消す手段が無いため)。
+  const [textEditSnapshot, setTextEditSnapshot] = useState<{
+    logo: LogoConfig | null;
+    logoSource: LogoSource | null;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const inputId = useId();
 
@@ -129,36 +141,54 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
 
   const handleCropCancel = () => setPendingUpload(null);
 
-  const handleTextConfirm = (draft: TextLogoDraft) => {
+  // テキストロゴは「適用」ボタンを待たず、1項目変更するたびに実際のロゴへ
+  // 即時反映する(キー入力やボタン操作の結果がすぐQRプレビューに出るようにするため)。
+  const handleTextChange = (draft: TextLogoDraft) => {
+    const trimmed = draft.text.trim();
+    if (!trimmed) return;
     const isFirstLogo = !logo;
     try {
-      const dataUrl = renderTextLogo(draft);
+      const dataUrl = renderTextLogo({ ...draft, text: trimmed });
       setLogoSource({
         type: "text",
-        text: draft.text,
+        text: trimmed,
         fontKey: draft.fontKey,
         fillColor: draft.fillColor,
         textColor: draft.textColor,
         heightRatio: draft.heightRatio,
+        bold: draft.bold,
+        italic: draft.italic,
+        outlineOnly: draft.outlineOnly,
       });
       onChange({
         dataUrl,
         sizeRatio: logo?.sizeRatio ?? DEFAULT_SIZE_RATIO,
-        fileName: draft.text,
+        fileName: trimmed,
         shape: draft.shape,
       });
       if (isFirstLogo) promoteToBestErrorCorrection();
     } catch {
       setError("テキストロゴの作成に失敗しました。");
-    } finally {
-      setPendingText(null);
     }
   };
 
-  const handleTextCancel = () => setPendingText(null);
+  const handleTextCancel = () => {
+    if (textEditSnapshot) {
+      onChange(textEditSnapshot.logo);
+      setLogoSource(textEditSnapshot.logoSource);
+    }
+    setPendingText(null);
+    setTextEditSnapshot(null);
+  };
+
+  const handleTextDone = () => {
+    setPendingText(null);
+    setTextEditSnapshot(null);
+  };
 
   const handleStartTextLogo = () => {
     setError(null);
+    setTextEditSnapshot({ logo, logoSource });
     setPendingText(
       logoSource?.type === "text"
         ? {
@@ -168,6 +198,9 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
             textColor: logoSource.textColor,
             shape: logo?.shape ?? DEFAULT_SHAPE,
             heightRatio: logoSource.heightRatio,
+            bold: logoSource.bold,
+            italic: logoSource.italic,
+            outlineOnly: logoSource.outlineOnly,
           }
         : DEFAULT_TEXT_DRAFT,
     );
@@ -176,6 +209,7 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
   const handleEdit = () => {
     if (!logo) return;
     if (logoSource?.type === "text") {
+      setTextEditSnapshot({ logo, logoSource });
       setPendingText({
         text: logoSource.text,
         fontKey: logoSource.fontKey,
@@ -183,6 +217,9 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
         textColor: logoSource.textColor,
         shape: logo.shape,
         heightRatio: logoSource.heightRatio,
+        bold: logoSource.bold,
+        italic: logoSource.italic,
+        outlineOnly: logoSource.outlineOnly,
       });
       return;
     }
@@ -205,6 +242,9 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
           fillColor: logoSource.fillColor,
           textColor: logoSource.textColor,
           heightRatio: logoSource.heightRatio,
+          bold: logoSource.bold,
+          italic: logoSource.italic,
+          outlineOnly: logoSource.outlineOnly,
           shape,
         });
         onChange({ ...logo, dataUrl, shape });
@@ -247,7 +287,14 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
   }
 
   if (pendingText) {
-    return <LogoTextComposer initial={pendingText} onConfirm={handleTextConfirm} onCancel={handleTextCancel} />;
+    return (
+      <LogoTextComposer
+        initial={pendingText}
+        onChange={handleTextChange}
+        onCancel={handleTextCancel}
+        onDone={handleTextDone}
+      />
+    );
   }
 
   return (
