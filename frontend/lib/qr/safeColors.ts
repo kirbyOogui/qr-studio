@@ -58,6 +58,11 @@ export interface SafeGradientOption {
 // その代わり彩度は100%(純色)にすることで、同じ明るさでもくすんで
 // 見えず鮮やかに感じられるようにしている。暗い側も同様に彩度100%の
 // 濃い純色にし、黒っぽく見える中間色(グレーがかった暗色)を避けている。
+//
+// sunset/ocean/grape/forestと、sunrise/aqua/berry/springはそれぞれ
+// 似た系統(暖色・寒色・紫系・緑系)のペアだが、明るい側・暗い側とも
+// 意図的に異なる色相を選び、単なる濃淡違いの重複にならないようにしている
+// (例: sunsetは橙→濃い赤だが、sunriseは金→濃いローズにして別物にしている)。
 export const SAFE_GRADIENTS: SafeGradientOption[] = [
   {
     key: "sunset",
@@ -114,8 +119,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#B34B00" },
-        { offset: 1, color: "#990033" },
+        { offset: 0, color: "#9D5B00" },
+        { offset: 1, color: "#70002F" },
       ],
     },
   },
@@ -126,8 +131,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#0071AA" },
-        { offset: 1, color: "#0016A3" },
+        { offset: 0, color: "#007969" },
+        { offset: 1, color: "#39007A" },
       ],
     },
   },
@@ -138,8 +143,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#BE00BE" },
-        { offset: 1, color: "#3100A3" },
+        { offset: 0, color: "#CF0079" },
+        { offset: 1, color: "#001A66" },
       ],
     },
   },
@@ -150,8 +155,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#297B00" },
-        { offset: 1, color: "#023C3A" },
+        { offset: 0, color: "#577400" },
+        { offset: 1, color: "#004170" },
       ],
     },
   },
