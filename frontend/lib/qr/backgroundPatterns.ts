@@ -16,6 +16,58 @@ export interface PatternDef {
   tile: (opacity: number) => { size: number; content: string };
 }
 
+// 花びら5枚を中心から均等angle(-90/-18/54/126/198度)に配置した、左右対称な桜の花を1つ描く。
+// 一番上の花びらが軸上(真上)に来るため、残り4枚は軸を挟んで自動的に鏡像対称になる。
+function sakuraFlower(cx: number, cy: number): string {
+  const r = 4.6;
+  const petals = [-90, -18, 54, 126, 198]
+    .map((deg) => {
+      const rad = (deg * Math.PI) / 180;
+      const px = (cx + r * Math.cos(rad)).toFixed(2);
+      const py = (cy + r * Math.sin(rad)).toFixed(2);
+      return `<ellipse cx="${px}" cy="${py}" rx="3.3" ry="2" transform="rotate(${deg} ${px} ${py})"/>`;
+    })
+    .join("");
+  return `${petals}<circle cx="${cx}" cy="${cy}" r="1.6"/>`;
+}
+
+// 対称な猫の顔(丸い頭+左右対称な三角の耳+目2つ+鼻+ひげ)を1つ描く。
+// 目・鼻・ひげは`featureOpacity`(本体より少し濃い値)を使うことで、低い強度でも
+// 顔のパーツが埋没して見えなくならないようにしている。強度が下がれば
+// featureOpacityも連動して下がるため、QR安全のための自動減光は損なわれない。
+function catFace(cx: number, cy: number, featureOpacity: number): string {
+  const r = 9;
+  const earBaseX = r * 0.75;
+  const earBaseY = r * 0.55;
+  const earSpread = r * 0.9 * 0.35;
+  const earHeight = r * 0.85;
+  const eyeDx = r * 0.35;
+  const eyeY = cy - r * 0.05;
+  const whiskerY = cy + r * 0.15;
+  return `
+    <path d="M${cx - earBaseX} ${cy - earBaseY} L${cx - earBaseX - earSpread} ${cy - earBaseY - earHeight} L${cx - r * 0.15} ${cy - r * 0.85} Z"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}"/>
+    <path d="M${cx + earBaseX} ${cy - earBaseY} L${cx + earBaseX + earSpread} ${cy - earBaseY - earHeight} L${cx + r * 0.15} ${cy - r * 0.85} Z"/>
+    <g fill-opacity="${featureOpacity}">
+      <circle cx="${(cx - eyeDx).toFixed(2)}" cy="${eyeY.toFixed(2)}" r="1"/>
+      <circle cx="${(cx + eyeDx).toFixed(2)}" cy="${eyeY.toFixed(2)}" r="1"/>
+      <path d="M${cx} ${(cy + r * 0.1).toFixed(2)} l-1.1 1.4 h2.2 Z"/>
+    </g>
+    <g stroke-width="0.6" stroke-opacity="${featureOpacity}" fill="none">
+      <path d="M${(cx - r * 0.55).toFixed(2)} ${whiskerY.toFixed(2)} l-4.5 -0.8"/>
+      <path d="M${(cx - r * 0.55).toFixed(2)} ${(whiskerY + 1.4).toFixed(2)} l-4.5 1.2"/>
+      <path d="M${(cx + r * 0.55).toFixed(2)} ${whiskerY.toFixed(2)} l4.5 -0.8"/>
+      <path d="M${(cx + r * 0.55).toFixed(2)} ${(whiskerY + 1.4).toFixed(2)} l4.5 1.2"/>
+    </g>`;
+}
+
+// 符頭(丸)+軸(縦棒)だけの左右対称な音符を1つ描く(旗は左右非対称になるため付けない)。
+function musicNote(cx: number, cy: number): string {
+  const r = 4.4;
+  const stem = 15;
+  return `<circle cx="${cx}" cy="${cy}" r="${r}"/><rect x="${cx - 1.2}" y="${cy - stem}" width="2.4" height="${(stem + r * 0.3).toFixed(2)}" rx="1.2"/>`;
+}
+
 export const PATTERNS: PatternDef[] = [
   {
     key: "sakura",
@@ -25,10 +77,8 @@ export const PATTERNS: PatternDef[] = [
       size: 72,
       content: `
         <g fill="#F472B6" fill-opacity="${o}">
-          <path d="M18 10c3 0 5 3 5 6s-2 6-5 6-5-3-5-6 2-6 5-6z"/>
-          <path d="M54 30c3 0 5 3 5 6s-2 6-5 6-5-3-5-6 2-6 5-6z"/>
-          <path d="M8 48c3 0 5 3 5 6s-2 6-5 6-5-3-5-6 2-6 5-6z"/>
-          <path d="M40 58c3 0 5 3 5 6s-2 6-5 6-5-3-5-6 2-6 5-6z"/>
+          ${sakuraFlower(20, 20)}
+          ${sakuraFlower(52, 50)}
         </g>`,
     }),
   },
@@ -55,12 +105,13 @@ export const PATTERNS: PatternDef[] = [
       content: `
         <g fill="#8B7FE8" fill-opacity="${o}">
           <circle cx="12" cy="14" r="2.4"/>
-          <circle cx="46" cy="8" r="1.6"/>
-          <circle cx="64" cy="36" r="2.2"/>
-          <circle cx="26" cy="48" r="1.8"/>
-          <circle cx="58" cy="66" r="2.4"/>
+          <circle cx="26" cy="60" r="1.8"/>
+          <circle cx="66" cy="14" r="1.6"/>
           <circle cx="10" cy="70" r="1.6"/>
-          <path d="M70 12a10 10 0 1 0 0 14 8 8 0 1 1 0-14z"/>
+          <circle cx="46" cy="42" r="8"/>
+        </g>
+        <g fill="none" stroke="#8B7FE8" stroke-opacity="${o}" stroke-width="2.4">
+          <ellipse cx="46" cy="42" rx="15" ry="5" transform="rotate(-20 46 42)"/>
         </g>`,
     }),
   },
@@ -68,16 +119,17 @@ export const PATTERNS: PatternDef[] = [
     key: "cat",
     label: "猫",
     swatchColor: "#C2703D",
-    tile: (o) => ({
-      size: 72,
-      content: `
-        <g fill="#C2703D" fill-opacity="${o}">
-          <path d="M16 20c-2-4-1-8 2-9 1 3 2 5 4 6 2-1 3-3 4-6 3 1 4 5 2 9-2 3-6 5-6 5s-4-2-6-5z"/>
-          <circle cx="20" cy="26" r="6"/>
-          <path d="M50 46c-2-4-1-8 2-9 1 3 2 5 4 6 2-1 3-3 4-6 3 1 4 5 2 9-2 3-6 5-6 5s-4-2-6-5z"/>
-          <circle cx="54" cy="52" r="6"/>
-        </g>`,
-    }),
+    tile: (o) => {
+      const featureOpacity = Math.min(o * 3, 0.9);
+      return {
+        size: 72,
+        content: `
+          <g fill="#C2703D" fill-opacity="${o}" stroke="#C2703D" stroke-opacity="${o}">
+            ${catFace(20, 26, featureOpacity)}
+            ${catFace(54, 54, featureOpacity)}
+          </g>`,
+      };
+    },
   },
   {
     key: "game",
@@ -170,8 +222,8 @@ export const PATTERNS: PatternDef[] = [
       size: 64,
       content: `
         <g fill="#22D3EE" fill-opacity="${o}">
-          <path d="M20 8 L20 30a5 5 0 1 1-3-4.6V12l8-2v18a5 5 0 1 1-3-4.6V8z"/>
-          <path d="M46 30 L46 52a5 5 0 1 1-3-4.6V34l8-2v18a5 5 0 1 1-3-4.6V30z"/>
+          ${musicNote(18, 42)}
+          ${musicNote(50, 18)}
         </g>`,
     }),
   },
