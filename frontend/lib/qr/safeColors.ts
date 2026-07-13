@@ -49,9 +49,12 @@ export interface SafeGradientOption {
   gradient: GradientConfig;
 }
 
-// 開始色・終了色・中間点の全てで白背景に対しコントラスト比4.5:1以上を確認済み。
-// さらに、開始色と終了色は色相(Hue)を意図的に大きく離してあり、
-// 単に濃淡が違うだけの同系色(=グラデーションに見えにくい)にならないようにしている。
+// 開始色・終了色の全てで、SAFE_BACKGROUNDSのどの背景色に対してもコントラスト比
+// 4.5:1以上を確保できることを実際に計算して検証済み(最も低い組み合わせでも4.6程度)。
+// 加えて、開始色と終了色は明度(Lightness)の差を意図的に大きく取っている
+// (以前の版は両端とも中間的な暗さの色相違いだけで、コントラスト制約の都合上
+// 「地味で変化が分かりにくい」グラデーションになっていた不具合の修正)。
+// 色相もわずかにずらしてあり、単なる濃淡ではなく色味の変化も感じられるようにしている。
 export const SAFE_GRADIENTS: SafeGradientOption[] = [
   {
     key: "sunset",
@@ -60,8 +63,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#C2185B" },
-        { offset: 1, color: "#B45309" },
+        { offset: 0, color: "#BA421B" },
+        { offset: 1, color: "#3B0C18" },
       ],
     },
   },
@@ -72,8 +75,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#1E3A8A" },
-        { offset: 1, color: "#047857" },
+        { offset: 0, color: "#12757F" },
+        { offset: 1, color: "#091434" },
       ],
     },
   },
@@ -84,8 +87,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#6D28D9" },
-        { offset: 1, color: "#BE185D" },
+        { offset: 0, color: "#BE1BA3" },
+        { offset: 1, color: "#1F0B32" },
       ],
     },
   },
@@ -96,8 +99,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#166534" },
-        { offset: 1, color: "#7C4A03" },
+        { offset: 0, color: "#4C7511" },
+        { offset: 1, color: "#0A2914" },
       ],
     },
   },

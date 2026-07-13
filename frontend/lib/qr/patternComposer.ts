@@ -1,5 +1,6 @@
 import { rasterizeSvgToPngBase64 } from "./svgRaster";
 import { buildFramedSvg } from "./frameTemplates";
+import { computeMinBorderSizeRatio } from "./borderConstraints";
 import type { FrameTemplateKey, QrDesignConfig } from "@/types/qr";
 
 export interface ComposedSvgResult {
@@ -66,13 +67,12 @@ export function buildComposedSvg(design: QrDesignConfig, qrDataUrl: string): Com
 
   if (!design.borderEnabled) return base;
 
-  return wrapWithBorder(
-    base,
-    design.borderWidthPx,
-    design.borderColor,
-    design.cornerRadiusPx,
-    design.borderSizeRatio,
-  );
+  // design.borderSizeRatioがUI側のクランプより古い/不整合な値であっても、
+  // 実際の書き出し・プレビューではここで必ず安全な下限に丸める
+  // (QRモジュールに枠線が重ならないことを保証する最後の砦)。
+  const safeSizeRatio = Math.max(design.borderSizeRatio, computeMinBorderSizeRatio(design));
+
+  return wrapWithBorder(base, design.borderWidthPx, design.borderColor, design.cornerRadiusPx, safeSizeRatio);
 }
 
 /**

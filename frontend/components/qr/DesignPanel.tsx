@@ -5,6 +5,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Slider } from "@/components/ui/Slider";
 import { SwatchPicker } from "@/components/ui/SwatchPicker";
 import { SAFE_BACKGROUNDS, SAFE_COLORS, SAFE_GRADIENTS } from "@/lib/qr/safeColors";
+import { computeMinBorderSizeRatio } from "@/lib/qr/borderConstraints";
 import type { QrDesignConfig, CornerDotType, CornerSquareType, DotType } from "@/types/qr";
 
 const DOT_TYPE_OPTIONS: { value: DotType; label: string }[] = [
@@ -44,6 +45,10 @@ export function DesignPanel({ design, onChange }: DesignPanelProps) {
   const toggleGradient = (enabled: boolean) => {
     onChange("gradient", enabled ? SAFE_GRADIENTS[0]!.gradient : null);
   };
+
+  // 枠線の「大きさ」はQuiet Zoneの内側(=実際のQRモジュール)に重なる手前までしか
+  // 縮小できないようにする。URLやサイズが変わるとQuiet Zone幅も変わるため毎回計算する。
+  const minBorderSizeRatio = computeMinBorderSizeRatio(design);
 
   return (
     <div className="flex flex-col gap-5">
@@ -212,10 +217,10 @@ export function DesignPanel({ design, onChange }: DesignPanelProps) {
             <Slider
               id="border-size"
               label="枠線の大きさ"
-              min={0.5}
+              min={minBorderSizeRatio}
               max={1}
               step={0.02}
-              value={design.borderSizeRatio}
+              value={Math.max(design.borderSizeRatio, minBorderSizeRatio)}
               onChange={(value) => onChange("borderSizeRatio", value)}
               formatValue={(v) => `${Math.round(v * 100)}%`}
             />
