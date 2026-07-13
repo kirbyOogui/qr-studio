@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
+import { InstallPwaButton } from "@/components/pwa/InstallPwaButton";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-canvas font-sans antialiased">
         {children}
         <ServiceWorkerRegister />
+        <InstallPwaButton />
       </body>
     </html>
   );
