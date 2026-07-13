@@ -9,14 +9,19 @@ export interface ComposedSvgResult {
   height: number;
 }
 
+// 柄の見た目を大きくするための拡大率。タイル寸法・内容ともに同じ倍率で
+// 拡大するため、線の太さ含めた比率は変わらない(単に繰り返し回数が減るだけ)。
+const PATTERN_SCALE = 2;
+
 function buildPatternFill(pattern: PatternKey, intensity: PatternIntensity): FrameBackgroundFill | null {
   if (pattern === "none") return null;
   const def = getPattern(pattern);
   const opacity = intensityOpacity(intensity);
   const { size, content } = def.tile(opacity);
+  const scaledSize = size * PATTERN_SCALE;
   const patternId = `bg-pattern-${pattern}`;
   return {
-    defs: `<pattern id="${patternId}" width="${size}" height="${size}" patternUnits="userSpaceOnUse">${content}</pattern>`,
+    defs: `<pattern id="${patternId}" width="${scaledSize}" height="${scaledSize}" patternUnits="userSpaceOnUse"><g transform="scale(${PATTERN_SCALE})">${content}</g></pattern>`,
     fillRef: `url(#${patternId})`,
   };
 }

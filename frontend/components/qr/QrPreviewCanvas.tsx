@@ -78,23 +78,23 @@ export function QrPreviewCanvas({ design, containerRef, status, composedPreview 
         )}
         {keepInstanceHidden && <div ref={containerRef} className="sr-only" aria-hidden />}
         {status === "checking" && <QualityLoadingOverlay />}
-        {hasUrl && status === "ready" && (
-          <span className="absolute -bottom-3 -right-3 flex items-center gap-1 whitespace-nowrap rounded-full bg-white py-1.5 pl-1.5 pr-3 text-xs font-medium text-ink shadow-soft">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">
-              <svg width="10" height="10" viewBox="0 0 8 8" fill="none">
-                <path
-                  d="M1 4L3 6L7 1.5"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-            読み取り確認済み
-          </span>
-        )}
       </div>
+      {hasUrl && status === "ready" && (
+        <span className="flex items-center gap-1 whitespace-nowrap rounded-full bg-white py-1.5 pl-1.5 pr-3 text-xs font-medium text-ink shadow-soft">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">
+            <svg width="10" height="10" viewBox="0 0 8 8" fill="none">
+              <path
+                d="M1 4L3 6L7 1.5"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          読み取り確認済み
+        </span>
+      )}
       {status === "degraded" && (
         <p
           role="status"
