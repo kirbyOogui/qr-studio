@@ -103,7 +103,13 @@ export interface TextLogoOptions {
 // 画像ロゴのように元解像度を気にする必要が無い)。
 const TEXT_LOGO_WIDTH = 512;
 const TEXT_LOGO_MIN_FONT_SIZE = 14;
-const TEXT_LOGO_LINE_HEIGHT_RATIO = 1.2;
+// 複数行を並べる際の行間(行の中心間の距離)。
+const TEXT_LOGO_LINE_HEIGHT_RATIO = 1.15;
+// 1行の実際に視認される文字の高さの概算(fontSizeに対する比率)。
+// lineHeightRatioをそのまま「1行あたりの専有高さ」として使うと、行間の
+// 余白(leading)を1行しかない場合にも上下に確保してしまい、単発行の
+// テキストが必要以上に小さく縮小される原因になっていた。
+const TEXT_LOGO_GLYPH_HEIGHT_RATIO = 0.74;
 
 /**
  * 短い(複数行可の)テキストを、塗りつぶした四角/丸の背景の上に中央揃えで
@@ -146,12 +152,17 @@ export function renderTextLogo({
   const lines = text.split("\n").map((line) => line.trim());
   if (lines.some((line) => line.length > 0)) {
     // 円形は角の分だけ実効的に使える幅・高さが狭くなるため、内接する正方形相当に絞る。
-    const usableWidth = shape === "circle" ? width * 0.62 : width * 0.85;
-    const usableHeight = shape === "circle" ? height * 0.62 : height * 0.82;
+    const usableWidth = shape === "circle" ? width * 0.68 : width * 0.9;
+    const usableHeight = shape === "circle" ? height * 0.68 : height * 0.9;
     const fontFamily = FONT_STACKS[fontKey];
     const fontStyle = italic ? "italic " : "";
     const fontWeight = bold ? "700" : "400";
     const buildFont = (size: number) => `${fontStyle}${fontWeight} ${size}px ${fontFamily}`;
+    // 実際に文字ブロックが専有する高さ。1行目はglyphHeightRatio分だけ、
+    // 2行目以降は行間(lineHeight)分だけ追加で積み上がる
+    // (1行しか無い場合に余分な行間を上下へ持たせないための計算)。
+    const blockHeight = (fontSize: number) =>
+      fontSize * TEXT_LOGO_GLYPH_HEIGHT_RATIO + (lines.length - 1) * fontSize * TEXT_LOGO_LINE_HEIGHT_RATIO;
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -161,17 +172,14 @@ export function renderTextLogo({
     let fontSize = Math.max(width, height);
     while (fontSize > TEXT_LOGO_MIN_FONT_SIZE) {
       ctx.font = buildFont(fontSize);
-      const lineHeight = fontSize * TEXT_LOGO_LINE_HEIGHT_RATIO;
-      const totalTextHeight = lineHeight * lines.length;
       const widestLine = Math.max(...lines.map((line) => ctx.measureText(line || " ").width));
-      if (widestLine <= usableWidth && totalTextHeight <= usableHeight) break;
+      if (widestLine <= usableWidth && blockHeight(fontSize) <= usableHeight) break;
       fontSize -= 2;
     }
 
     ctx.font = buildFont(fontSize);
     const lineHeight = fontSize * TEXT_LOGO_LINE_HEIGHT_RATIO;
-    const totalTextHeight = lineHeight * lines.length;
-    const firstLineY = height / 2 - totalTextHeight / 2 + lineHeight / 2;
+    const firstLineY = height / 2 - blockHeight(fontSize) / 2 + (fontSize * TEXT_LOGO_GLYPH_HEIGHT_RATIO) / 2;
 
     if (outlineOnly) {
       ctx.strokeStyle = textColor;

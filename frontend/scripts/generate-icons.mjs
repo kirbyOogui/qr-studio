@@ -1,5 +1,10 @@
 // PWA用アイコンを手続き的に生成するビルド補助スクリプト（外部ネイティブ依存なし）。
 // `npm run generate-icons` で実行する。
+// 【注意】2026-07-13以降、public/icons/ 配下の実アイコンはこのスクリプトでは
+// なく、独自デザイン画像(QR自動作成ツール直下の"ChatGPT Image ...png")を
+// Pillowでリサイズして手動生成したものに差し替え済み。このスクリプトを
+// 実行すると、その差し替え後のアイコンが古い手続き生成版で上書きされて
+// しまうため、再実行しないこと(再生成が必要な場合は元画像から作り直す)。
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
