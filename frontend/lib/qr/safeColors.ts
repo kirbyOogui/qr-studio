@@ -50,14 +50,14 @@ export interface SafeGradientOption {
 }
 
 // 開始色・終了色の全てで、SAFE_BACKGROUNDSのどの背景色に対してもコントラスト比
-// 4.5:1以上を確保できることを実際に計算して検証済み(最も低い組み合わせでも4.6程度)。
-// 加えて、開始色と終了色は明度(Lightness)の差を意図的に大きく取っている
-// (以前の版は両端とも中間的な暗さの色相違いだけで、コントラスト制約の都合上
-// 「地味で変化が分かりにくい」グラデーションになっていた不具合の修正)。
-// ただし暗い側をほぼ黒(Lightness 10〜14%)にすると「黒っぽくて暗い」という
-// 印象になってしまったため、彩度を保ったまま明度16〜24%程度の「濃い色」に
-// 留め、黒に寄せすぎないようにしている。
-// 色相もわずかにずらしてあり、単なる濃淡ではなく色味の変化も感じられるようにしている。
+// 4.5:1以上を確保できることを実際に計算して検証済み。
+//
+// 明るい側の色は、白背景に対してWCAG比4.5:1を満たせる理論上の明るさの
+// 上限ぎりぎりまで詰めてある(これより明るくすると読み取り安全性の
+// 基準を割る)。ここが「これ以上明るくできない」実質的な壁になっている。
+// その代わり彩度は100%(純色)にすることで、同じ明るさでもくすんで
+// 見えず鮮やかに感じられるようにしている。暗い側も同様に彩度100%の
+// 濃い純色にし、黒っぽく見える中間色(グレーがかった暗色)を避けている。
 export const SAFE_GRADIENTS: SafeGradientOption[] = [
   {
     key: "sunset",
@@ -66,8 +66,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#B24A16" },
-        { offset: 1, color: "#6D0D1D" },
+        { offset: 0, color: "#C33A00" },
+        { offset: 1, color: "#7A0014" },
       ],
     },
   },
@@ -78,8 +78,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#137488" },
-        { offset: 1, color: "#0C2A64" },
+        { offset: 0, color: "#00758D" },
+        { offset: 1, color: "#001C70" },
       ],
     },
   },
@@ -90,8 +90,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#BC17AF" },
-        { offset: 1, color: "#361169" },
+        { offset: 0, color: "#C200B2" },
+        { offset: 1, color: "#33007A" },
       ],
     },
   },
@@ -102,17 +102,11 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#417719" },
-        { offset: 1, color: "#104129" },
+        { offset: 0, color: "#337A00" },
+        { offset: 1, color: "#04442E" },
       ],
     },
   },
-  // ここから下は上記4色より全体的に明るい「ブライト」系。安全に選べる色の
-  // 中で最も明るい色(コントラスト比4.5:1ぎりぎり)同士を組み合わせるだけだと
-  // 両端がほぼ同じ明るさになり内部コントラストが失われる(=地味に見える)ため、
-  // 片方は安全上限の明るさ、もう片方はそれより少し濃いめの色にして
-  // 変化を保っている。ただし濃い方も明度30%前後までに留め、黒っぽくは
-  // 見えないようにしている。
   {
     key: "sunrise",
     label: "サンライズ",
@@ -120,8 +114,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#A95113" },
-        { offset: 1, color: "#841037" },
+        { offset: 0, color: "#B34B00" },
+        { offset: 1, color: "#990033" },
       ],
     },
   },
@@ -132,8 +126,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#197390" },
-        { offset: 1, color: "#122391" },
+        { offset: 0, color: "#0071AA" },
+        { offset: 1, color: "#0016A3" },
       ],
     },
   },
@@ -144,8 +138,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#B917B9" },
-        { offset: 1, color: "#3B188B" },
+        { offset: 0, color: "#BE00BE" },
+        { offset: 1, color: "#3100A3" },
       ],
     },
   },
@@ -156,8 +150,8 @@ export const SAFE_GRADIENTS: SafeGradientOption[] = [
       type: "linear",
       rotationDeg: 45,
       stops: [
-        { offset: 0, color: "#417719" },
-        { offset: 1, color: "#156544" },
+        { offset: 0, color: "#297B00" },
+        { offset: 1, color: "#023C3A" },
       ],
     },
   },
