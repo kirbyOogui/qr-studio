@@ -210,6 +210,16 @@ export function DesignPanel({ design, onChange }: DesignPanelProps) {
               onChange={(color) => onChange("borderColor", color)}
             />
             <Slider
+              id="border-size"
+              label="枠線の大きさ"
+              min={0.5}
+              max={1}
+              step={0.02}
+              value={design.borderSizeRatio}
+              onChange={(value) => onChange("borderSizeRatio", value)}
+              formatValue={(v) => `${Math.round(v * 100)}%`}
+            />
+            <Slider
               id="border-width"
               label="枠線の太さ"
               min={1}

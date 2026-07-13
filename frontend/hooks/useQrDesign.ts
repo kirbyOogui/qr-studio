@@ -17,6 +17,7 @@ export const DEFAULT_DESIGN: QrDesignConfig = {
   borderEnabled: false,
   borderColor: "#E5E5E7",
   borderWidthPx: 0,
+  borderSizeRatio: 1,
   cornerRadiusPx: 24,
   sizePreset: "auto",
   sizePx: SIZE_PRESETS.auto.widthPx,

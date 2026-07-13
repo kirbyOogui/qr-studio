@@ -80,7 +80,14 @@ export interface QrDesignConfig {
   cornerDotType: CornerDotType;
   borderEnabled: boolean;
   borderColor: string;
+  /** 枠線(線そのもの)の太さ。 */
   borderWidthPx: number;
+  /**
+   * 枠線が描く四角の大きさ(面積)。1=QR全体の縁ぎりぎり(既存の見た目)、
+   * 1未満にすると枠線の四角自体が小さくなり、外側に背景色の余白が生まれる。
+   * 太さ(borderWidthPx)とは独立したパラメータ。
+   */
+  borderSizeRatio: number;
   cornerRadiusPx: number;
   sizePreset: SizePresetKey;
   sizePx: number;

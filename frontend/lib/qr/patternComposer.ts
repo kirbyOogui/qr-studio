@@ -9,20 +9,32 @@ export interface ComposedSvgResult {
 }
 
 /**
- * 既存の合成結果の外周ぎりぎりに、内側へ収まる形(inset)で枠線を重ねる。
- * strokeをrectの中心線ではなく`width/2`だけ内側にオフセットして描くことで、
- * 枠線の外側の端がちょうどキャンバスの端に一致する(=キャンバスサイズを
- * 一切拡大せず、既存の背景色の領域を削って枠線を描く)。
+ * 既存の合成結果の内側に枠線を重ねる。キャンバスサイズ自体は一切拡大しない
+ * (既存の背景色の領域の中だけで完結させる)。
+ *
+ * 「太さ」(borderWidthPx、線そのものの幅)と「大きさ」(sizeRatio、枠線が
+ * 描く四角自体の面積)は独立したパラメータ。sizeRatio=1で外周ぎりぎり
+ * (strokeを`width/2`だけ内側にオフセットし、外側の端をキャンバスの端に
+ * 一致させる)、1未満にすると四角自体を中央へ縮小させ、外側に背景色の
+ * 余白を生む。
  */
 function wrapWithBorder(
   base: ComposedSvgResult,
   borderWidthPx: number,
   borderColor: string,
   cornerRadiusPx: number,
+  sizeRatio: number,
 ): ComposedSvgResult {
+  const clampedRatio = Math.min(1, Math.max(0, sizeRatio));
+  const marginX = (base.width * (1 - clampedRatio)) / 2;
+  const marginY = (base.height * (1 - clampedRatio)) / 2;
   const inset = borderWidthPx / 2;
-  const rx = Math.max(0, cornerRadiusPx - inset);
-  const rect = `<rect x="${inset}" y="${inset}" width="${base.width - borderWidthPx}" height="${base.height - borderWidthPx}" rx="${rx}" fill="none" stroke="${borderColor}" stroke-width="${borderWidthPx}"/>`;
+  const x = marginX + inset;
+  const y = marginY + inset;
+  const rectWidth = base.width - marginX * 2 - borderWidthPx;
+  const rectHeight = base.height - marginY * 2 - borderWidthPx;
+  const rx = Math.max(0, cornerRadiusPx * clampedRatio - inset);
+  const rect = `<rect x="${x}" y="${y}" width="${rectWidth}" height="${rectHeight}" rx="${rx}" fill="none" stroke="${borderColor}" stroke-width="${borderWidthPx}"/>`;
   return { svg: base.svg.replace("</svg>", `${rect}</svg>`), width: base.width, height: base.height };
 }
 
@@ -54,7 +66,13 @@ export function buildComposedSvg(design: QrDesignConfig, qrDataUrl: string): Com
 
   if (!design.borderEnabled) return base;
 
-  return wrapWithBorder(base, design.borderWidthPx, design.borderColor, design.cornerRadiusPx);
+  return wrapWithBorder(
+    base,
+    design.borderWidthPx,
+    design.borderColor,
+    design.cornerRadiusPx,
+    design.borderSizeRatio,
+  );
 }
 
 /**
