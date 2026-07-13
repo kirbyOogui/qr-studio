@@ -8,7 +8,7 @@
 
 import type { FontKey } from "@/types/qr";
 import { FONT_STACKS } from "./fonts";
-import { TEXT_LOGO_MIN_HEIGHT_RATIO } from "./logoConstraints";
+import { TEXT_LOGO_MIN_HEIGHT_RATIO, TEXT_LOGO_MIN_FONT_SCALE } from "./logoConstraints";
 
 export type LogoShape = "square" | "circle";
 
@@ -97,6 +97,11 @@ export interface TextLogoOptions {
   italic: boolean;
   /** trueの場合、文字を塗りつぶさず輪郭線のみで描く(縁取り文字)。 */
   outlineOnly: boolean;
+  /**
+   * 幅・高さに収まる自動計算の最大フォントサイズに対する倍率
+   * (TEXT_LOGO_MIN_FONT_SCALE〜1)。1.0が自動最大サイズ。
+   */
+  fontScale: number;
 }
 
 // 文字数に関わらず一定の解像度で描く(ベクター的なテキスト描画のため、
@@ -126,6 +131,7 @@ export function renderTextLogo({
   bold,
   italic,
   outlineOnly,
+  fontScale,
 }: TextLogoOptions): string {
   const width = TEXT_LOGO_WIDTH;
   const height =
@@ -189,6 +195,13 @@ export function renderTextLogo({
       fontSize -= 2;
       fitted = measure(fontSize);
     }
+
+    // ここまでで求めた値は「幅・高さに収まる最大サイズ」。ユーザーが指定した
+    // 倍率(1.0=その最大サイズ)を掛けて最終サイズを確定し、再計測して
+    // 中央揃えに使うascent/blockHeightも縮小後のサイズに合わせる。
+    const clampedScale = Math.min(1, Math.max(TEXT_LOGO_MIN_FONT_SCALE, fontScale));
+    fontSize = Math.max(TEXT_LOGO_MIN_FONT_SIZE, fontSize * clampedScale);
+    fitted = measure(fontSize);
 
     ctx.font = buildFont(fontSize);
     const lineHeight = fontSize * TEXT_LOGO_LINE_HEIGHT_RATIO;

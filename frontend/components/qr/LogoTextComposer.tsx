@@ -6,7 +6,7 @@ import { Slider } from "@/components/ui/Slider";
 import { SwatchPicker } from "@/components/ui/SwatchPicker";
 import { FONT_OPTIONS } from "@/lib/qr/fonts";
 import { renderTextLogo } from "@/lib/qr/logoProcessing";
-import { MAX_TEXT_LOGO_LENGTH, TEXT_LOGO_MIN_HEIGHT_RATIO } from "@/lib/qr/logoConstraints";
+import { MAX_TEXT_LOGO_LENGTH, TEXT_LOGO_MIN_HEIGHT_RATIO, TEXT_LOGO_MIN_FONT_SCALE } from "@/lib/qr/logoConstraints";
 import { SAFE_BACKGROUNDS, SAFE_COLORS } from "@/lib/qr/safeColors";
 import type { FontKey, LogoShape } from "@/types/qr";
 
@@ -22,6 +22,8 @@ export interface TextLogoDraft {
   italic: boolean;
   /** trueの場合、文字を塗りつぶさず輪郭線のみで描く(縁取り文字)。 */
   outlineOnly: boolean;
+  /** 自動計算される最大フォントサイズに対する倍率(TEXT_LOGO_MIN_FONT_SCALE〜1)。 */
+  fontScale: number;
 }
 
 interface LogoTextComposerProps {
@@ -120,18 +122,30 @@ export function LogoTextComposer({ initial, onChange, onCancel, onDone }: LogoTe
         </div>
       </div>
 
-      {draft.shape === "square" && (
+      <div className="space-y-4">
+        {draft.shape === "square" && (
+          <Slider
+            id="text-logo-height"
+            label="縦の高さ"
+            min={TEXT_LOGO_MIN_HEIGHT_RATIO}
+            max={1}
+            step={0.05}
+            value={draft.heightRatio}
+            onChange={(heightRatio) => updateDraft({ heightRatio })}
+            formatValue={(v) => `${Math.round(v * 100)}%`}
+          />
+        )}
         <Slider
-          id="text-logo-height"
-          label="縦の高さ"
-          min={TEXT_LOGO_MIN_HEIGHT_RATIO}
+          id="text-logo-font-scale"
+          label="文字サイズ"
+          min={TEXT_LOGO_MIN_FONT_SCALE}
           max={1}
           step={0.05}
-          value={draft.heightRatio}
-          onChange={(heightRatio) => updateDraft({ heightRatio })}
+          value={draft.fontScale}
+          onChange={(fontScale) => updateDraft({ fontScale })}
           formatValue={(v) => `${Math.round(v * 100)}%`}
         />
-      )}
+      </div>
 
       <div>
         <p className="mb-2 text-sm font-medium text-ink/80">フォント</p>

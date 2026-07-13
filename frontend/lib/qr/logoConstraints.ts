@@ -24,3 +24,9 @@ export const MAX_TEXT_LOGO_LENGTH = 16;
 
 export const TEXT_LOGO_MIN_HEIGHT_RATIO = 0.4;
 export const TEXT_LOGO_DEFAULT_HEIGHT_RATIO = 1;
+
+// 文字サイズは自動計算される最大サイズに対する倍率として持つ(1.0=自動最大)。
+// 幅・高さに収まる最大値をベースに、ユーザーが意図的に小さくしたい場合の
+// 調整幅を持たせる。
+export const TEXT_LOGO_MIN_FONT_SCALE = 0.5;
+export const TEXT_LOGO_DEFAULT_FONT_SCALE = 1;

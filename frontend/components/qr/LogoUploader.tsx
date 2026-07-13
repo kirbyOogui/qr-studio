@@ -14,6 +14,7 @@ import {
   LOGO_SIZE_MIN_RATIO,
   LOGO_ERROR_CORRECTION,
   TEXT_LOGO_DEFAULT_HEIGHT_RATIO,
+  TEXT_LOGO_DEFAULT_FONT_SCALE,
 } from "@/lib/qr/logoConstraints";
 import { SAFE_BACKGROUNDS, SAFE_COLORS } from "@/lib/qr/safeColors";
 import type { ErrorCorrectionLevel, LogoConfig, LogoShape } from "@/types/qr";
@@ -37,6 +38,7 @@ const DEFAULT_TEXT_DRAFT: TextLogoDraft = {
   bold: true,
   italic: false,
   outlineOnly: false,
+  fontScale: TEXT_LOGO_DEFAULT_FONT_SCALE,
 };
 
 interface PendingUpload {
@@ -59,6 +61,7 @@ type LogoSource =
       bold: boolean;
       italic: boolean;
       outlineOnly: boolean;
+      fontScale: number;
     };
 
 async function readFileAsDataUrl(file: File): Promise<string> {
@@ -159,6 +162,7 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
         bold: draft.bold,
         italic: draft.italic,
         outlineOnly: draft.outlineOnly,
+        fontScale: draft.fontScale,
       });
       onChange({
         dataUrl,
@@ -201,6 +205,7 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
             bold: logoSource.bold,
             italic: logoSource.italic,
             outlineOnly: logoSource.outlineOnly,
+            fontScale: logoSource.fontScale,
           }
         : DEFAULT_TEXT_DRAFT,
     );
@@ -220,6 +225,7 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
         bold: logoSource.bold,
         italic: logoSource.italic,
         outlineOnly: logoSource.outlineOnly,
+        fontScale: logoSource.fontScale,
       });
       return;
     }
@@ -245,6 +251,7 @@ export function LogoUploader({ logo, onChange, errorCorrection, onErrorCorrectio
           bold: logoSource.bold,
           italic: logoSource.italic,
           outlineOnly: logoSource.outlineOnly,
+          fontScale: logoSource.fontScale,
           shape,
         });
         onChange({ ...logo, dataUrl, shape });

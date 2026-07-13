@@ -57,7 +57,11 @@ export function Tabs({ tabs, ariaLabel }: TabsProps) {
           );
         })}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* touch-pan-yで縦方向のスワイプのみ受け付け、横方向のパン/スワイプは
+          ブラウザのデフォルト挙動に渡さない(横に動かせてしまうのを防ぐ)。
+          overflow-x-hiddenで、内部コンテンツが万一はみ出しても横スクロールが
+          発生しないようにする。 */}
+      <div className="min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto">
         {tabs.map((tab) => (
           <div
             key={tab.key}
