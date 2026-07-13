@@ -968,3 +968,19 @@ sw.js変更を含めてclean(エラー無し)であることを確認。
   生成するファイル名がWindowsのパス長上限を超えて失敗することがある。
   Node.js検証全般に加えて、`next dev`のように実際にファイルへ書き出す
   操作は、短いASCIIパス(例: `C:\qrv`)へ配置してから行う必要がある。
+
+■ デプロイ
+ユーザーから「デプロイまでお願い」と明確な指示を受けたため、本変更
+(frontend側のみ)を本番反映した。
+1. 変更ファイル(`frontend/components/qr/LogoTextComposer.tsx`、
+   `frontend/components/qr/LogoUploader.tsx`、本記録ファイル)をコミットし
+   GitHub(`kirbyOogui/qr-studio`)のmainへpush(59bcb0e..90ff3e3)。
+2. 既にリンク済みのVercelプロジェクト(`qr-studio`)に対し`vercel --prod`
+   でfrontendのみ再デプロイ(backendのコード変更が無いためCloud Run側は
+   再デプロイ対象外と判断)。ビルド・TypeScriptチェックともに成功。
+3. 本番URL(`https://qr-studio-livid.vercel.app`)へcurlでアクセスし
+   200 OKを確認。
+
+■ 教訓
+- 過去の教訓通り、デプロイは今回もユーザーからの明示的な指示
+  (「デプロイまでお願い」)を受けてから実行した。
