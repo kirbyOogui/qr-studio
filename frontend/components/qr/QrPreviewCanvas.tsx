@@ -34,19 +34,18 @@ export function QrPreviewCanvas({ design, containerRef, status, composedPreview 
             }}
           />
         ) : hasUrl ? (
+          // 枠線が有効な場合はcomposedPreview(実際の書き出しと同じ合成SVG)側で
+          // 描画されるため、ここに到達するのは枠線・フレームどちらも未使用の
+          // 場合のみ。
           <div
             className="flex items-center justify-center p-4 transition-shadow"
             style={{
               width: "min(360px, 100%)",
-              // 枠線とQR本体の間の余白(quiet zone相当)がQRの背景色と別の色に
+              // QR本体との間の余白(quiet zone相当)がQRの背景色と別の色に
               // ならないよう、常にdesign.backgroundColorに合わせる(以前は
-              // 固定で白だったため、背景色を変えると枠線との間に白い隙間が
-              // 見えてしまっていた)。
+              // 固定で白だったため、背景色を変えると隙間が見えてしまっていた)。
               backgroundColor: design.backgroundColor,
               borderRadius: `${design.cornerRadiusPx}px`,
-              border: design.borderEnabled
-                ? `${design.borderWidthPx}px solid ${design.borderColor}`
-                : undefined,
               boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.08)",
             }}
           >

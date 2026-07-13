@@ -13,7 +13,8 @@ interface LogoCropperProps {
   onCancel: () => void;
 }
 
-const VIEWPORT = 260;
+// スマホでの操作しやすさを優先し、指の可動域に収まる大きさに抑える。
+const VIEWPORT = 200;
 const MIN_ZOOM = 1;
 const MAX_ZOOM_CAP = 6;
 // これより小さい範囲までズームインすると、出力時に引き伸ばされてぼやけるため
@@ -183,7 +184,7 @@ export function LogoCropper({
 
   return (
     <div className="space-y-3">
-      <div className="mx-auto w-full max-w-[288px] rounded-2xl border border-black/10 bg-black/[0.02] p-3">
+      <div className="mx-auto w-full max-w-[228px] rounded-2xl border border-black/10 bg-black/[0.02] p-3">
         <div
           className="relative mx-auto touch-none overflow-hidden rounded-xl bg-black/5"
           style={{ width: VIEWPORT, height: VIEWPORT, cursor: dragState ? "grabbing" : "grab" }}
