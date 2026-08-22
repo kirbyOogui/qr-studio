@@ -45,6 +45,10 @@ export function QrStudio() {
   });
   const composedPreview = useComposedPreview(design, exportPngBase64);
 
+  // デモ公開版ではフレーム・ロゴの挿入機能のみ無効化する(NEXT_PUBLIC_DEMO_MODE=true時)。
+  // 生成・色/形状のカスタマイズ・各形式でのダウンロードはデモでもフル機能のまま。
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 pb-24 pt-10 sm:px-6">
       <UrlInputCard value={design.url} onValidUrl={(url) => update("url", url)} />
@@ -104,6 +108,8 @@ export function QrStudio() {
                   key: "frame",
                   label: "フレーム",
                   accentColor: "#C1440E",
+                  locked: isDemoMode,
+                  lockedMessage: "フレームテンプレートはデモ版では無効です",
                   content: (
                     <FramePanel
                       frameTemplate={design.frameTemplate}
@@ -123,6 +129,8 @@ export function QrStudio() {
                   key: "logo",
                   label: "ロゴ",
                   accentColor: "#0F766E",
+                  locked: isDemoMode,
+                  lockedMessage: "ロゴ挿入はデモ版では無効です",
                   content: (
                     <LogoUploader
                       logo={design.logo}
